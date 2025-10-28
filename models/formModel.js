@@ -1,0 +1,543 @@
+const db = require("../config")()
+
+const WorkloadForm = {
+  getTermForm: (callback) => {
+    const sql = ` 
+                SELECT
+                    tb_task.task_name,
+                    tb_workload_group.workload_group_name,
+                    tb_quantity_workload.quantity_workload_hours
+                FROM
+                    tb_workload_group
+                LEFT JOIN 
+                    tb_quantity_workload 
+                ON 
+                    tb_workload_group.workload_group_id = tb_quantity_workload.workload_group_id
+                LEFT JOIN 
+                    tb_task 
+                ON 
+                    tb_task.task_id = tb_quantity_workload.task_id`
+    db.query(sql, callback)
+  },
+
+  addFormList: (WorkloadFormDetail, callback) => {
+    const sql = "INSERT INTO tb_workload_formlist SET ?"
+    db.query(sql, WorkloadFormDetail, callback)
+  },
+
+  addFormListBulk: (WorkloadFormDetails, callback) => {
+    console.log('🔍 addFormListBulk model - Input:', JSON.stringify(WorkloadFormDetails, null, 2))
+    
+    if (!Array.isArray(WorkloadFormDetails) || WorkloadFormDetails.length === 0) {
+      console.log('❌ Model: Empty or invalid array')
+      return callback(null, { affectedRows: 0 })
+    }
+    
+    // ใช้ INSERT IGNORE เพื่อข้าม duplicate entries
+    const sql = "INSERT IGNORE INTO tb_workload_formlist (set_asses_list_id, status) VALUES ?"
+    const values = WorkloadFormDetails.map(item => [item.set_asses_list_id, item.status_id])
+    
+    console.log('🔍 Model - SQL:', sql)
+    console.log('🔍 Model - Values:', values)
+    
+    db.query(sql, [values], (error, result) => {
+      if (error) {
+        console.error('❌ Model - Database error:', error)
+      } else {
+        console.log('✅ Model - Success:', result)
+        console.log(`📊 Inserted ${result.affectedRows} rows, ${result.warningCount} warnings`)
+      }
+      callback(error, result)
+    })
+  },
+
+  checkGroupID: (as_u_id, round_list_id, callback) => {
+    const sql = `
+            SELECT
+                tb_set_assessorlist.set_asses_list_id,
+                tb_set_assessorlist.as_u_id,
+                tb_users.u_fname,
+                tb_users.u_lname,
+                tb_set_assessorlist.workload_group_id,
+                tb_workload_group.workload_group_name,
+                tb_workload_formlist.formlist_id
+            FROM
+                tb_set_assessorlist
+            LEFT JOIN tb_users ON tb_users.u_id = tb_set_assessorlist.as_u_id
+            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
+            LEFT JOIN tb_workload_formlist ON tb_workload_formlist.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
+            WHERE 
+                tb_set_assessorlist.as_u_id = ?
+            AND tb_set_assessorlist.round_list_id = ?
+            AND tb_set_assessorlist.workload_group_id IS NOT NULL
+            AND tb_set_assessorlist.workload_group_id != 0`
+    db.query(sql, [as_u_id, round_list_id], callback)
+  },
+
+  getWorkloadGroupId: (as_u_id, round_list_id, callback) => {
+    const sql = `
+            SELECT workload_group_id 
+            FROM tb_set_assessorlist 
+            WHERE as_u_id = ? AND round_list_id = ?`
+    db.query(sql, [as_u_id, round_list_id], callback)
+  },
+
+  getGroupDetails: (workload_group_id, callback) => {
+    const sql = `
+            SELECT
+                tb_workload_group.workload_group_id,
+                tb_workload_group.workload_group_name,
+                tb_set_roundlist.round,
+                tb_set_roundlist.year,
+                tb_set_roundlist.round_list_id,
+                tb_set_assessorlist.set_asses_list_id,
+                tb_users.u_id,
+                tb_status.status_id,
+                tb_status.status_name,
+                tb_workload_formlist.formlist_id,
+                tb_users.u_fname,
+                tb_users.u_lname
+            FROM
+                tb_workload_formlist
+            LEFT JOIN tb_set_assessorlist ON tb_workload_formlist.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
+            LEFT JOIN tb_set_roundlist ON tb_set_roundlist.round_list_id = tb_set_assessorlist.round_list_id
+            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
+            LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
+            LEFT JOIN tb_status ON tb_status.status_id = tb_workload_formlist.status
+            WHERE 
+                tb_set_assessorlist.workload_group_id = ?`
+    db.query(sql, [workload_group_id], callback)
+  },
+
+  selectWorkloadFormGroup: (WorkloadFormDetail, as_u_id, round_id, callback) => {
+    const workload_group_id = WorkloadFormDetail
+    const sql = `
+            UPDATE tb_set_assessorlist AS t1
+            JOIN (
+                SELECT set_asses_list_id 
+                FROM tb_set_assessorlist 
+                WHERE as_u_id = ? AND round_list_id = ? 
+                LIMIT 1
+            ) AS t2 ON t1.set_asses_list_id = t2.set_asses_list_id
+            SET t1.workload_group_id = ?;
+        `
+    db.query(sql, [as_u_id, round_id, workload_group_id], callback)
+  },
+
+  getAllFormList: (callback) => {
+    const sql = `
+            SELECT
+                tb_workload_formlist.formlist_id,
+                tb_status.status_name,
+                tb_workload_group.workload_group_name,
+                tb_prefix.prefix_name,
+                tb_users.u_fname,
+                tb_users.u_lname,
+                tb_set_roundlist.round_list_name,
+                tb_set_roundlist.round,
+                tb_set_roundlist.year
+            FROM
+                tb_workload_formlist
+            LEFT JOIN tb_set_assessorlist ON tb_workload_formlist.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
+            LEFT JOIN tb_status ON tb_status.status_id = tb_workload_formlist.status_id
+            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
+            LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
+            LEFT JOIN tb_prefix ON tb_users.prefix_id = tb_prefix.prefix_id
+            LEFT JOIN tb_set_roundlist ON tb_set_assessorlist.round_list_id =tb_set_roundlist.round_list_id
+            `
+    db.query(sql, callback)
+  },
+
+  // Updated to use tb_workload_link_info instead of link columns from tb_workload_form_info
+  getAllFormInfo: (callback) => {
+    const sql = `
+                SELECT
+                    tb_subtask.subtask_name,
+                    tb_task.task_name,
+                    tb_workload_form_info.as_u_id,
+                    tb_users.u_fname,
+                    tb_users.u_lname,
+                    tb_prefix.prefix_name,
+                    tb_workload_form_info.formlist_id,
+                    tb_workload_form_info.form_id,
+                    tb_workload_form_info.form_title,
+                    tb_workload_form_info.description,
+                    tb_workload_form_info.workload,
+                    tb_workload_form_info.quality,
+                    tb_workload_form_info.file_type,
+                    tb_workload_form_info.ex_score,
+                    GROUP_CONCAT(tb_workload_link_info.link_name SEPARATOR ', ') AS link_names,
+                    GROUP_CONCAT(tb_workload_link_info.link_path SEPARATOR ', ') AS links
+                FROM
+                    tb_workload_form_info
+                LEFT JOIN tb_subtask ON tb_subtask.subtask_id = tb_workload_form_info.subtask_id
+                LEFT JOIN tb_task ON tb_subtask.task_id = tb_task.task_id
+                LEFT JOIN tb_users ON tb_users.u_id = tb_workload_form_info.as_u_id
+                LEFT JOIN tb_prefix ON tb_users.prefix_id = tb_prefix.prefix_id
+                LEFT JOIN tb_workload_formlist ON tb_workload_form_info.formlist_id = tb_workload_formlist.formlist_id
+                LEFT JOIN tb_workload_link_info ON tb_workload_form_info.form_id = tb_workload_link_info.form_id
+                GROUP BY tb_workload_form_info.form_id;
+        `
+    db.query(sql, callback)
+  },
+
+  // Updated to use tb_workload_link_info instead of link columns from tb_workload_form_info
+  getOneFormInfo: (formlist_id, subtask_id, callback) => {
+    const sql = `
+            SELECT
+                tb_subtask.subtask_name,
+                tb_task.task_name,
+                tb_workload_form_info.as_u_id,
+                tb_users.u_fname,
+                tb_users.u_lname,
+                tb_prefix.prefix_name,
+                tb_workload_form_info.formlist_id,
+                tb_workload_form_info.form_title,
+                tb_workload_form_info.description,
+                tb_workload_form_info.workload,
+                tb_workload_form_info.quality,
+                tb_workload_form_info.file_type,
+                tb_workload_form_info.ex_score,
+                tb_workload_form_info.form_id,
+                tb_workload_link_info.link_id,
+                tb_workload_link_info.link_name,
+                tb_workload_link_info.link_path
+            FROM
+                tb_workload_form_info
+            LEFT JOIN tb_subtask ON tb_subtask.subtask_id = tb_workload_form_info.subtask_id
+            LEFT JOIN tb_task ON tb_subtask.task_id = tb_task.task_id
+            LEFT JOIN tb_users ON tb_users.u_id = tb_workload_form_info.as_u_id
+            LEFT JOIN tb_prefix ON tb_users.prefix_id = tb_prefix.prefix_id
+            LEFT JOIN tb_workload_formlist ON tb_workload_form_info.formlist_id = tb_workload_formlist.formlist_id
+            LEFT JOIN tb_workload_link_info ON tb_workload_form_info.form_id = tb_workload_link_info.form_id
+            WHERE tb_workload_form_info.formlist_id = ? AND tb_workload_form_info.subtask_id = ?
+            ORDER BY tb_workload_form_info.as_u_id`
+    db.query(sql, [formlist_id, subtask_id], callback)
+  },
+
+  getFilesRound: (formlist_id, callback) => {
+    const sql = `
+            SELECT
+                tb_workload_file_info.form_id AS form_id1,
+                tb_workload_file_info.file_name,
+                tb_workload_file_info.size,
+                tb_workload_file_info.fileinfo_id,
+                tb_workload_form_info.formlist_id,
+                tb_workload_file_info.fileinfo_id,
+                tb_workload_file_info.file_name,
+                tb_workload_file_info.size
+            FROM
+                tb_workload_form_info
+            LEFT JOIN tb_workload_formlist ON tb_workload_formlist.formlist_id = tb_workload_form_info.formlist_id
+            LEFT JOIN tb_workload_file_info ON tb_workload_form_info.form_id = tb_workload_file_info.form_id
+            WHERE tb_workload_form_info.formlist_id = ?
+                `
+    db.query(sql, [formlist_id], callback)
+  },
+
+  getFilesByFormId: (form_id, callback) => {
+    const sql = `
+            SELECT
+                file_name,
+                size,
+                form_id
+            FROM
+                tb_workload_file_info
+            WHERE
+                form_id = ?`
+    db.query(sql, [form_id], callback)
+  },
+
+  addFormInfo: (WorkloadFormInfoDetail, callback) => {
+    const { link, link_name, ...formData } = WorkloadFormInfoDetail
+    const sql = "INSERT INTO tb_workload_form_info SET ?"
+    db.query(sql, formData, callback)
+  },
+
+  addLinkInfo: (linkData, callback) => {
+    if (!linkData || linkData.length === 0) {
+      return callback(null, { affectedRows: 0 })
+    }
+
+    const sql = "INSERT INTO tb_workload_link_info (form_id, link_name, link_path) VALUES ?"
+    const values = linkData.map((link) => [link.form_id, link.link_name, link.link_path])
+    db.query(sql, [values], callback)
+  },
+
+  addFileInfo: (fileData, callback) => {
+    const sql = "INSERT INTO tb_workload_file_info (form_id, file_name, size) VALUES ?"
+    const values = fileData.map((file) => [file.form_id, file.file_name, file.size])
+    db.query(sql, [values], callback)
+  },
+
+  deleteFormInfo: (form_id, callback) => {
+    const sql = "DELETE FROM tb_workload_form_info WHERE form_id = ?"
+    db.query(sql, [form_id], callback)
+  },
+
+  getFormDetail: (form_id, callback) => {
+    const sql = `
+    SELECT
+      tb_workload_file_info.fileinfo_id,
+      tb_workload_file_info.file_name,
+      tb_workload_file_info.size,
+      tb_workload_form_info.form_id,
+      tb_workload_form_info.as_u_id,
+      tb_workload_form_info.formlist_id,
+      tb_workload_form_info.form_title,
+      tb_workload_form_info.description,
+      tb_workload_form_info.workload,
+      tb_workload_form_info.quality,
+      tb_workload_form_info.file_type,
+      tb_workload_form_info.subtask_id,
+      tb_workload_form_info.ex_score,
+      tb_workload_link_info.link_id,
+      tb_workload_link_info.link_name,
+      tb_workload_link_info.link_path
+    FROM
+      tb_workload_form_info
+      LEFT JOIN tb_workload_file_info ON tb_workload_form_info.form_id = tb_workload_file_info.form_id
+      LEFT JOIN tb_workload_link_info ON tb_workload_form_info.form_id = tb_workload_link_info.form_id
+    WHERE
+      tb_workload_form_info.form_id = ?`
+    db.query(sql, [form_id], callback)
+  },
+
+  // เพิ่มฟังก์ชันนี้ใน WorkloadForm model
+  getLinksByFormId: (form_id, callback) => {
+    const sql = `
+    SELECT
+      link_id,
+      link_name,
+      link_path,
+      form_id
+    FROM
+      tb_workload_link_info
+    WHERE
+      form_id = ?`
+    db.query(sql, [form_id], callback)
+  },
+
+  updateFormInfo: (WorkloadFormInfoDetail, callback) => {
+    const { link, link_name, ...formData } = WorkloadFormInfoDetail
+    const sql = "UPDATE tb_workload_form_info SET ? WHERE form_id = ?"
+    db.query(sql, [formData, formData.form_id], callback)
+  },
+
+  updateLinkInfo: (linkData, callback) => {
+    const sql = "UPDATE tb_workload_link_info SET ? WHERE link_id = ?"
+    db.query(sql, [linkData, linkData.link_id], callback)
+  },
+
+  deleteLinkById: (link_id, callback) => {
+    const sql = "DELETE FROM tb_workload_link_info WHERE link_id = ?"
+    db.query(sql, [link_id], callback)
+  },
+  deleteUnselectedLinks: (form_id, existingLinkIds, callback) => {
+    let sql
+    let params
+
+    console.log("Delete unselected links - form_id:", form_id, "existingLinkIds:", existingLinkIds)
+
+    // If existingLinkIds is empty, we should NOT delete all links
+    if (!existingLinkIds || existingLinkIds.length === 0) {
+      console.log("No existing link IDs provided, skipping deletion")
+      return callback(null, { affectedRows: 0 })
+    }
+
+    sql = "DELETE FROM tb_workload_link_info WHERE form_id = ? AND link_id NOT IN (?)"
+    params = [form_id, existingLinkIds]
+
+    db.query(sql, params, callback)
+  },
+
+  deleteUnselectedFiles: (form_id, existingFileIds, callback) => {
+    let sql
+    let params
+
+    console.log("Delete unselected files - form_id:", form_id, "existingFileIds:", existingFileIds)
+
+    // If existingFileIds is empty, we should NOT delete all files
+    if (!existingFileIds || existingFileIds.length === 0) {
+      console.log("No existing file IDs provided, skipping deletion")
+      return callback(null, { affectedRows: 0 })
+    }
+
+    sql = "DELETE FROM tb_workload_file_info WHERE form_id = ? AND fileinfo_id NOT IN (?)"
+    params = [form_id, existingFileIds]
+
+    db.query(sql, params, callback)
+  },
+
+  getFilesToDelete: (form_id, existingFileIds, callback) => {
+    let sql
+    let params
+
+    console.log("Get files to delete - form_id:", form_id, "existingFileIds:", existingFileIds)
+
+    if (existingFileIds && existingFileIds.length > 0) {
+      sql = "SELECT fileinfo_id, file_name FROM tb_workload_file_info WHERE form_id = ? AND fileinfo_id NOT IN (?)"
+      params = [form_id, existingFileIds]
+    } else {
+      sql = "SELECT fileinfo_id, file_name FROM tb_workload_file_info WHERE form_id = ?"
+      params = [form_id]
+    }
+
+    db.query(sql, params, callback)
+  },
+
+  getFilesByIds: (fileIds, callback) => {
+    if (!fileIds || fileIds.length === 0) {
+      return callback(null, [])
+    }
+
+    const sql = "SELECT fileinfo_id, file_name, size, form_id FROM tb_workload_file_info WHERE fileinfo_id IN (?)"
+    db.query(sql, [fileIds], callback)
+  },
+
+  deleteFilesByIds: (fileIds, callback) => {
+    if (!fileIds || fileIds.length === 0) {
+      return callback(null, { affectedRows: 0 })
+    }
+
+    console.log("Deleting files with IDs:", fileIds)
+    const sql = "DELETE FROM tb_workload_file_info WHERE fileinfo_id IN (?)"
+    db.query(sql, [fileIds], callback)
+  },
+
+  // เช็ค status ของ workload form
+  checkWorkloadFormStatus: (as_u_id, round_list_id, callback) => {
+    const sql = `
+      SELECT 
+        tb_workload_formlist.status,
+        tb_workload_formlist.formlist_id,
+        tb_set_assessorlist.as_u_id,
+        tb_set_assessorlist.round_list_id
+      FROM tb_workload_formlist
+      LEFT JOIN tb_set_assessorlist ON tb_workload_formlist.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
+      WHERE tb_set_assessorlist.as_u_id = ? AND tb_set_assessorlist.round_list_id = ?
+      LIMIT 1
+    `;
+    db.query(sql, [as_u_id, round_list_id], callback);
+  },
+
+  // ดึงข้อมูลภาระงานตามโครงสร้าง tb_task → tb_subtask → form_info เฉพาะ user
+  getWorkloadItemsByGroup: (as_u_id, round_list_id, callback) => {
+    try {
+      // ดึงข้อมูลแบบ JOIN เพื่อได้ task, subtask names, หลักฐาน และข้อมูลจำนวนชั่วโมงที่ต้องการ
+      const sql = `
+        SELECT 
+          t.task_id,
+          t.task_name,
+          st.subtask_id,
+          st.subtask_name,
+          fi.form_id,
+          fi.form_title,
+          fi.description,
+          fi.workload,
+          fi.quality,
+          fi.file_type,
+          fi.ex_score,
+          fi.as_u_id,
+          fli.link_name,
+          fli.link_path,
+          ffi.file_name,
+          ffi.fileinfo_id,
+          sal.workload_group_id,
+          wg.workload_group_name,
+          qw.quantity_workload_hours
+        FROM tb_workload_form_info fi
+        LEFT JOIN tb_subtask st ON fi.subtask_id = st.subtask_id
+        LEFT JOIN tb_task t ON st.task_id = t.task_id
+        LEFT JOIN tb_workload_link_info fli ON fi.form_id = fli.form_id
+        LEFT JOIN tb_workload_file_info ffi ON fi.form_id = ffi.form_id
+        LEFT JOIN tb_workload_formlist wfl ON fi.formlist_id = wfl.formlist_id
+        LEFT JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
+        LEFT JOIN tb_workload_group wg ON sal.workload_group_id = wg.workload_group_id
+        LEFT JOIN tb_quantity_workload qw ON t.task_id = qw.task_id AND sal.workload_group_id = qw.workload_group_id
+        WHERE sal.as_u_id = ? AND sal.round_list_id = ?
+        ORDER BY t.task_id, st.subtask_id, fi.form_id, ffi.fileinfo_id, fli.link_id
+      `;
+      console.log('Executing simple query with params:', [as_u_id, round_list_id]);
+      
+      // ตรวจสอบ database connection
+      if (!db) {
+        console.error('Database connection is null');
+        return callback(new Error('Database connection is null'), null);
+      }
+      
+      console.log('📊 Executing query with params:', { as_u_id, round_list_id });
+      db.query(sql, [as_u_id, round_list_id], (error, result) => {
+        if (error) {
+          console.error('❌ SQL Error:', error);
+          console.error('❌ SQL Query:', sql);
+          console.error('❌ Parameters:', [as_u_id, round_list_id]);
+          console.error('❌ Error Code:', error.code);
+          console.error('❌ Error SQL State:', error.sqlState);
+        } else {
+          console.log('✅ Query successful, found records:', result ? result.length : 0);
+          if (result && result.length > 0) {
+            console.log('✅ First record:', result[0]);
+          } else {
+            console.log('⚠️ No records found for user:', as_u_id, 'round:', round_list_id);
+          }
+        }
+        callback(error, result);
+      });
+    } catch (err) {
+      console.error('Model function error:', err);
+      callback(err, null);
+    }
+  },
+
+  // อัปเดต status ใน tb_workload_formlist
+  updateWorkloadFormStatus: (set_asses_list_id, status, callback) => {
+    const sql = "UPDATE tb_workload_formlist SET status = ? WHERE set_asses_list_id = ?";
+    db.query(sql, [status, set_asses_list_id], callback);
+  },
+
+  // อัปเดต status แบบ array ใน tb_workload_formlist
+  updateWorkloadFormStatusBulk: (set_asses_list_ids, status, callback) => {
+    if (!Array.isArray(set_asses_list_ids) || set_asses_list_ids.length === 0) {
+      return callback(null, { affectedRows: 0 });
+    }
+    
+    const sql = "UPDATE tb_workload_formlist SET status = ? WHERE set_asses_list_id IN (?)";
+    db.query(sql, [status, set_asses_list_ids], callback);
+  },
+
+  // ตรวจสอบสถานะการประเมินของ assessor
+  getAssessorEvaluationStatus: (set_asses_list_id, callback) => {
+    const sql = `
+      SELECT 
+        sal.workload_group_id,
+        wfl.status as form_status,
+        CASE 
+          WHEN wfl.status = 1 THEN 'completed'
+          WHEN sal.workload_group_id IS NULL THEN 'not_started'
+          WHEN sal.workload_group_id IS NOT NULL AND wfl.status = 0 THEN 'in_progress'
+          WHEN EXISTS (
+            SELECT 1 FROM tb_workload_form_info wfi 
+            WHERE wfi.formlist_id = wfl.formlist_id 
+            AND wfi.as_u_id = sal.as_u_id
+          ) THEN 'in_progress'
+          ELSE 'not_started'
+        END as evaluation_status
+      FROM tb_set_assessorlist sal
+      LEFT JOIN tb_workload_formlist wfl ON sal.set_asses_list_id = wfl.set_asses_list_id
+      WHERE sal.set_asses_list_id = ?
+    `;
+    db.query(sql, [set_asses_list_id], callback);
+  },
+
+  // ดึง set_asses_list_id จาก user_id และ round_list_id
+  getSetAssessorListIdByUserAndRound: (user_id, round_list_id, callback) => {
+    const sql = `
+      SELECT set_asses_list_id 
+      FROM tb_set_assessorlist 
+      WHERE as_u_id = ? AND round_list_id = ?`;
+    db.query(sql, [user_id, round_list_id], callback);
+  },
+}
+
+module.exports = WorkloadForm

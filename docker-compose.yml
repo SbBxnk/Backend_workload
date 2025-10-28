@@ -1,0 +1,67 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: workload_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ss_for_personnel_rmutll
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - workload_network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # phpMyAdmin
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: workload_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - workload_network
+
+  # Backend Node.js Application
+  backend:
+    build: .
+    container_name: workload_backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=workload_mysql
+      - DB_USER=root
+      - DB_PASS=rootpassword
+      - DB_NAME=ss_for_personnel_rmutll
+      - TOKEN=your-secret-token
+      - EMAIL_USER=chayakon@spacetrax.co
+      - EMAIL_PASS=dknqpaezlwvwqwpu
+      - FRONTEND_URL=http://localhost:3000
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./uploads:/app/uploads
+      - .:/app
+      - /app/node_modules
+      - ../frontend/public/images:/frontend/public/images
+    depends_on:
+      - mysql
+    networks:
+      - workload_network
+    command: npm start
+
+volumes:
+  mysql_data:
+
+networks:
+  workload_network:
+    driver: bridge

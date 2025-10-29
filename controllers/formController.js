@@ -1606,6 +1606,402 @@ const submitWorkloadForm = (req, res) => {
   });
 };
 
+// ========== SNAPSHOT FUNCTIONS ==========
+
+// ส่งฟอร์มและสร้าง snapshot
+const submitFormWithSnapshot = (req, res) => {
+  const { formlist_id, as_u_id, round_list_id } = req.body;
+
+  console.log('Request body:', req.body);
+  console.log('formlist_id:', formlist_id, typeof formlist_id);
+  console.log('as_u_id:', as_u_id, typeof as_u_id);
+  console.log('round_list_id:', round_list_id, typeof round_list_id);
+
+  if (!formlist_id || !as_u_id || !round_list_id) {
+    return res.status(400).json(createResponse(
+      false,
+      "กรุณาระบุ formlist_id, as_u_id และ round_list_id",
+      [],
+      "MISSING_PARAMETERS"
+    ));
+  }
+
+  // เริ่ม transaction
+  const createSnapshot = () => {
+    return new Promise((resolve, reject) => {
+      // 1. ลบ snapshot เก่า (ถ้ามี)
+      WorkloadForm.deleteExistingSnapshot(formlist_id, as_u_id, round_list_id, (deleteError) => {
+        if (deleteError) {
+          console.error('Error deleting existing snapshot:', deleteError);
+          reject(deleteError);
+          return;
+        }
+
+        // 2. สร้าง snapshot ใหม่
+        WorkloadForm.createFormSnapshot(formlist_id, as_u_id, round_list_id, (createError, createResult) => {
+          if (createError) {
+            console.error('Error creating snapshot:', createError);
+            reject(createError);
+            return;
+          }
+
+          const snapshotId = createResult.insertId;
+          console.log('Created snapshot with ID:', snapshotId);
+
+          // 3. คัดลอก Task (พร้อม quantity) ไป snapshot
+          WorkloadForm.copyTasksToSnapshot(snapshotId, formlist_id, (copyTaskError) => {
+            if (copyTaskError) {
+              console.error('Error copying tasks to snapshot:', copyTaskError);
+              reject(copyTaskError);
+              return;
+            }
+
+            // 4. คัดลอก Subtask ไป snapshot
+            WorkloadForm.copySubtasksToSnapshot(snapshotId, (copySubtaskError) => {
+              if (copySubtaskError) {
+                console.error('Error copying subtasks to snapshot:', copySubtaskError);
+                reject(copySubtaskError);
+                return;
+              }
+
+              // 5. คัดลอก Form Info (ผูกกับ task/subtask)
+              WorkloadForm.copyFormInfoToSnapshot(snapshotId, formlist_id, (copyFormError) => {
+                if (copyFormError) {
+                  console.error('Error copying form info:', copyFormError);
+                  reject(copyFormError);
+                  return;
+                }
+
+                // 6. คัดลอกไฟล์
+                WorkloadForm.copyFilesToSnapshot((filesError) => {
+                  if (filesError) {
+                    console.error('Error copying files:', filesError);
+                    reject(filesError);
+                    return;
+                  }
+
+                  // 7. คัดลอกลิงก์
+                  WorkloadForm.copyLinksToSnapshot((linksError) => {
+                    if (linksError) {
+                      console.error('Error copying links:', linksError);
+                      reject(linksError);
+                      return;
+                    }
+
+                    resolve(snapshotId);
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  };
+
+  // ดำเนินการสร้าง snapshot
+  createSnapshot()
+    .then((snapshotId) => {
+      // อัปเดต status ใน tb_workload_formlist
+      WorkloadForm.updateWorkloadFormStatus(formlist_id, 1, (statusError, statusResult) => {
+        if (statusError) {
+          console.error('Error updating form status:', statusError);
+        return res.status(500).json(createResponse(
+          false,
+          "ไม่สามารถอัปเดตสถานะฟอร์มได้",
+          [],
+          "DATABASE_ERROR"
+        ));
+        }
+
+        return res.status(200).json(createResponse(
+          true,
+          "ส่งฟอร์มและสร้าง snapshot สำเร็จ",
+          {
+            snapshot_id: snapshotId,
+            formlist_id: formlist_id,
+            status: 1
+          }
+        ));
+      });
+    })
+    .catch((error) => {
+      console.error('Error in submitFormWithSnapshot:', error);
+      return res.status(500).json(createResponse(
+        false,
+        "ไม่สามารถส่งฟอร์มได้",
+        [],
+        "SNAPSHOT_ERROR"
+      ));
+    });
+};
+
+// ดึงข้อมูลฟอร์มจาก snapshot หรือตารางหลัก
+const getFormInfoWithSnapshot = (req, res) => {
+  const { formlist_id, subtask_id } = req.params;
+  const as_u_id = req.query.as_u_id;
+  const round_list_id = req.query.round_list_id;
+
+  if (!formlist_id || !subtask_id || !as_u_id || !round_list_id) {
+    return res.status(400).json(createResponse(
+      false,
+      "กรุณาระบุ formlist_id, subtask_id, as_u_id และ round_list_id",
+      [],
+      "MISSING_PARAMETERS"
+    ));
+  }
+
+  // ตรวจสอบว่ามี snapshot หรือไม่
+  WorkloadForm.checkSnapshotExists(formlist_id, as_u_id, round_list_id, (checkError, checkResult) => {
+    if (checkError) {
+      console.error('Error checking snapshot:', checkError);
+      return res.status(500).json(createResponse(
+        false,
+        "ไม่สามารถตรวจสอบ snapshot ได้",
+        [],
+        "DATABASE_ERROR"
+      ));
+    }
+
+    // ถ้ามี snapshot ให้ดึงจาก snapshot
+    if (checkResult && checkResult.length > 0) {
+      console.log('Loading from snapshot for formlist_id:', formlist_id);
+      
+        // ดึงข้อมูล snapshot ทั้งหมดสำหรับ formlist_id นี้ (ไม่จำกัดแค่ subtask_id เดียว)
+        WorkloadForm.getAllFormInfoFromSnapshot(formlist_id, as_u_id, (snapshotError, snapshotResult) => {
+          if (snapshotError) {
+            console.error('Error fetching from snapshot:', snapshotError);
+            return res.status(500).json(createResponse(
+              false,
+              "ไม่สามารถดึงข้อมูลจาก snapshot ได้",
+              [],
+              "DATABASE_ERROR"
+            ));
+          }
+
+          // ดึงไฟล์และลิงก์สำหรับแต่ละฟอร์ม
+          const processSnapshotData = async () => {
+            const processedData = [];
+            
+            for (const form of snapshotResult) {
+              const formData = { ...form, files: [], links: [] };
+              
+              // ดึงไฟล์
+              await new Promise((resolve) => {
+                WorkloadForm.getFilesFromSnapshot(form.form_id, (fileError, files) => {
+                  if (!fileError && files) {
+                    formData.files = files;
+                  }
+                  resolve();
+                });
+              });
+              
+              // ดึงลิงก์
+              await new Promise((resolve) => {
+                WorkloadForm.getLinksFromSnapshot(form.form_id, (linkError, links) => {
+                  if (!linkError && links) {
+                    formData.links = links;
+                  }
+                  resolve();
+                });
+              });
+              
+              processedData.push(formData);
+            }
+            
+            return processedData;
+          };
+
+          processSnapshotData().then((processedData) => {
+            return res.status(200).json(createResponse(
+              true,
+              "ดึงข้อมูลจาก snapshot สำเร็จ",
+              processedData
+            ));
+          });
+        });
+    } else {
+      // ถ้าไม่มี snapshot ให้ดึงจากตารางหลัก
+      console.log('Loading from main tables for formlist_id:', formlist_id);
+      
+      WorkloadForm.getOneFormInfo(formlist_id, subtask_id, (error, formResult) => {
+        if (error) {
+          console.error("Error fetching form info:", error);
+          return res.status(500).json({
+            code: 500,
+            timestamp: new Date().toISOString(),
+            transactionCode: `TXN_${Date.now()}`,
+            success: false,
+            titleMessage: "เกิดข้อผิดพลาด",
+            message: "การเชื่อมต่อข้อมูลผิดพลาด",
+            errorCode: "DATABASE_ERROR",
+            payload: [],
+            meta: {
+              limit: 0,
+              page: 1,
+              sort: "",
+              total_pages: 0,
+              total_rows: 0
+            }
+          });
+        }
+
+        if (formResult.length === 0) {
+          return res.status(404).json({
+            code: 404,
+            timestamp: new Date().toISOString(),
+            transactionCode: `TXN_${Date.now()}`,
+            success: false,
+            titleMessage: "ไม่พบข้อมูล",
+            message: "Form info not found",
+            errorCode: "NOT_FOUND",
+            payload: [],
+            meta: {
+              limit: 0,
+              page: 1,
+              sort: "",
+              total_pages: 0,
+              total_rows: 0
+            }
+          });
+        }
+
+        // กรองข้อมูลตาม as_u_id ถ้ามีการระบุ
+        let filteredResult = formResult;
+        if (as_u_id) {
+          filteredResult = formResult.filter((row) => row.as_u_id == as_u_id);
+          if (filteredResult.length === 0) {
+            return res.status(404).json({
+              code: 404,
+              timestamp: new Date().toISOString(),
+              transactionCode: `TXN_${Date.now()}`,
+              success: false,
+              titleMessage: "ไม่พบข้อมูล",
+              message: "Form info not found for specified user",
+              errorCode: "NOT_FOUND",
+              payload: [],
+              meta: {
+                limit: 0,
+                page: 1,
+                sort: "",
+                total_pages: 0,
+                total_rows: 0
+              }
+            });
+          }
+        }
+
+        // สร้าง Map เพื่อจัดกลุ่มข้อมูลตาม form_id
+        const formMap = new Map();
+
+        // จัดกลุ่มข้อมูลฟอร์มและลิงก์
+        filteredResult.forEach((row) => {
+          const formId = row.form_id;
+
+          if (!formMap.has(formId)) {
+            // สร้างข้อมูลฟอร์มใหม่
+            const formData = { ...row, links: [], files: [] };
+            delete formData.link_id;
+            delete formData.link_name;
+            delete formData.link_path;
+            formMap.set(formId, formData);
+          }
+
+          // เพิ่มข้อมูลลิงก์ถ้ามี
+          if (row.link_id && row.link_name && row.link_path) {
+            const form = formMap.get(formId);
+            form.links.push({
+              link_id: row.link_id,
+              link_name: row.link_name,
+              link_path: row.link_path,
+              form_id: formId,
+            });
+          }
+        });
+
+        // ดึงข้อมูลไฟล์สำหรับแต่ละฟอร์ม
+        Promise.all(
+          Array.from(formMap.values()).map((formData) => {
+            return new Promise((resolve, reject) => {
+              WorkloadForm.getFilesByFormId(formData.form_id, (fileError, fileResult) => {
+                if (fileError) {
+                  console.error("Error fetching file info:", fileError);
+                  reject(fileError);
+                  return;
+                }
+
+                formData.files = fileResult || [];
+                resolve(formData);
+              });
+            });
+          }),
+        )
+          .then((data) => {
+            return res.status(200).json(createResponse(
+              true,
+              "ดึงข้อมูลจากตารางหลักสำเร็จ",
+              data
+            ));
+          })
+          .catch((error) => {
+            console.error("Error in processing files:", error);
+            return res.status(500).json(createResponse(
+              false,
+              "Error processing files",
+              [],
+              "PROCESSING_ERROR"
+            ));
+          });
+      });
+    }
+  });
+};
+
+// ดึง formlist_id จาก as_u_id และ round_list_id
+const getFormlistId = (req, res) => {
+  console.log('=== getFormlistId function called ===');
+  const { as_u_id, round_list_id } = req.params;
+
+  console.log('getFormlistId - as_u_id:', as_u_id, 'round_list_id:', round_list_id);
+
+  if (!as_u_id || !round_list_id) {
+    return res.status(400).json(createResponse(
+      false, 
+      'Missing required parameters: as_u_id and round_list_id',
+      [],
+      'MISSING_PARAMETERS'
+    ));
+  }
+
+  WorkloadForm.getFormlistId(as_u_id, round_list_id, (error, result) => {
+    if (error) {
+      console.error('Error getting formlist_id:', error);
+      return res.status(500).json(createResponse(
+        false,
+        'ไม่สามารถดึงข้อมูล formlist_id ได้',
+        [],
+        'DATABASE_ERROR'
+      ));
+    }
+
+    if (!result || result.length === 0) {
+      return res.status(404).json(createResponse(
+        false,
+        'ไม่พบข้อมูลฟอร์มสำหรับผู้ใช้และรอบนี้',
+        [],
+        'FORM_NOT_FOUND'
+      ));
+    }
+
+    res.json(createResponse(
+      true,
+      'ดึงข้อมูล formlist_id สำเร็จ',
+      result[0]
+    ));
+    console.log('getFormlistId - sending response:', result[0]);
+  });
+};
+
 module.exports = {
   getAllFormList,
   getTermForm,
@@ -1626,4 +2022,7 @@ module.exports = {
   updateWorkloadFormStatusBulk,
   getAssessorEvaluationStatus,
   submitWorkloadForm,
+  submitFormWithSnapshot,
+  getFormInfoWithSnapshot,
+  getFormlistId,
 }

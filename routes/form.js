@@ -20,6 +20,9 @@ const {
   updateWorkloadFormStatusBulk,
   getAssessorEvaluationStatus,
   submitWorkloadForm,
+  submitFormWithSnapshot,
+  getFormInfoWithSnapshot,
+  getFormlistId,
 } = require("../controllers/formController")
 const auth = require("../middleware/auth")
 const upload = require("../middleware/file_upload")
@@ -73,5 +76,15 @@ router.get("/workload_form/evaluation_status/:set_asses_list_id", auth, getAsses
 
 // ส่งฟอร์มการประเมินภาระงาน
 router.patch("/workload_form/submit/:user_id/:round_list_id", auth, submitWorkloadForm)
+
+// ========== SNAPSHOT ROUTES ==========
+// ส่งฟอร์มและสร้าง snapshot
+router.post("/workload_form/submit_with_snapshot", auth, submitFormWithSnapshot)
+
+// ดึงข้อมูลฟอร์มจาก snapshot หรือตารางหลัก
+router.get("/workload_form/form_info_with_snapshot/:formlist_id/:subtask_id", auth, getFormInfoWithSnapshot)
+
+// ดึง formlist_id จาก as_u_id และ round_list_id
+router.get("/workload_form/get_formlist_id/:as_u_id/:round_list_id", auth, getFormlistId)
 
 module.exports = router

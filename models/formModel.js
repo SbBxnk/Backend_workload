@@ -538,6 +538,216 @@ const WorkloadForm = {
       WHERE as_u_id = ? AND round_list_id = ?`;
     db.query(sql, [user_id, round_list_id], callback);
   },
+
+  // ========== SNAPSHOT FUNCTIONS ==========
+  
+  // สร้าง snapshot ของฟอร์มที่ส่งแล้ว
+  createFormSnapshot: (formlist_id, as_u_id, round_list_id, callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_form (formlist_id, as_u_id, round_list_id, status)
+      VALUES (?, ?, ?, 1)`;
+    db.query(sql, [formlist_id, as_u_id, round_list_id], callback);
+  },
+
+  // ลบ snapshot เก่า (ถ้ามี)
+  deleteExistingSnapshot: (formlist_id, as_u_id, round_list_id, callback) => {
+    const sql = `
+      DELETE FROM snapshot_workload_form 
+      WHERE formlist_id = ? AND as_u_id = ? AND round_list_id = ?`;
+    db.query(sql, [formlist_id, as_u_id, round_list_id], callback);
+  },
+
+  // คัดลอกข้อมูลฟอร์มไปยัง snapshot
+  copyFormInfoToSnapshot: (snapshot_id, formlist_id, callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_form_info 
+      (snapshot_id, task_id, subtask_id, original_form_id, form_id, form_title, description, workload, quality, file_type, ex_score)
+      SELECT 
+        ?,
+        st.task_id,
+        wfi.subtask_id,
+        wfi.form_id AS original_form_id,
+        wfi.form_id AS form_id,
+        wfi.form_title,
+        wfi.description,
+        wfi.workload,
+        wfi.quality,
+        wfi.file_type,
+        wfi.ex_score
+      FROM tb_workload_form_info wfi
+      INNER JOIN tb_subtask st ON st.subtask_id = wfi.subtask_id
+      WHERE wfi.formlist_id = ?`;
+    db.query(sql, [snapshot_id, formlist_id], callback);
+  },
+
+  // คัดลอกข้อมูล task (พร้อม quantity) ไปยัง snapshot
+  copyTasksToSnapshot: (snapshot_id, formlist_id, callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_task 
+      (snapshot_id, task_id, task_name, quantity_workload_hours, workload_group_id, workload_group_name)
+      SELECT 
+        ?,
+        t.task_id,
+        t.task_name,
+        q.quantity_workload_hours,
+        wg.workload_group_id,
+        wg.workload_group_name
+      FROM tb_task t
+      INNER JOIN tb_workload_formlist fl ON fl.formlist_id = ?
+      INNER JOIN tb_set_assessorlist sal ON sal.set_asses_list_id = fl.set_asses_list_id
+      LEFT JOIN tb_quantity_workload q ON q.task_id = t.task_id AND q.workload_group_id = sal.workload_group_id
+      LEFT JOIN tb_workload_group wg ON wg.workload_group_id = sal.workload_group_id
+      ORDER BY t.task_id`;
+    db.query(sql, [snapshot_id, formlist_id], callback);
+  },
+
+  // คัดลอกข้อมูล subtask ของ task แต่ละอันไปยัง snapshot
+  copySubtasksToSnapshot: (snapshot_id, callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_subtask 
+      (snapshot_id, task_id, subtask_id, subtask_name)
+      SELECT 
+        ?,
+        st.task_id,
+        st.subtask_id,
+        st.subtask_name
+      FROM tb_subtask st
+      INNER JOIN snapshot_workload_task swt 
+        ON swt.snapshot_id = ? AND swt.task_id = st.task_id
+      ORDER BY st.task_id, st.subtask_id`;
+    db.query(sql, [snapshot_id, snapshot_id], callback);
+  },
+
+  // คัดลอกไฟล์ไปยัง snapshot
+  copyFilesToSnapshot: (callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_file_info 
+      (snapshot_form_id, file_name, file_path, file_size, file_type)
+      SELECT 
+        sfs.snapshot_form_id,
+        f.file_name,
+        CONCAT('/files/', f.file_name) as file_path,
+        f.size as file_size,
+        'file' as file_type
+      FROM tb_workload_file_info f
+      INNER JOIN snapshot_workload_form_info sfs ON f.form_id = sfs.original_form_id`;
+    db.query(sql, callback);
+  },
+
+  // คัดลอกลิงก์ไปยัง snapshot
+  copyLinksToSnapshot: (callback) => {
+    const sql = `
+      INSERT INTO snapshot_workload_link_info 
+      (snapshot_form_id, link_name, link_path)
+      SELECT 
+        sfs.snapshot_form_id,
+        l.link_name,
+        l.link_path
+      FROM tb_workload_link_info l
+      INNER JOIN snapshot_workload_form_info sfs ON l.form_id = sfs.original_form_id`;
+    db.query(sql, callback);
+  },
+
+  // ดึงข้อมูลฟอร์มจาก snapshot (สำหรับ status = 1)
+  getFormInfoFromSnapshot: (formlist_id, as_u_id, callback) => {
+    const sql = `
+      SELECT 
+        sfs.snapshot_form_id as form_id,
+        sfs.subtask_id,
+        sfs.form_title,
+        sfs.description,
+        sfs.workload,
+        sfs.quality,
+        sfs.file_type,
+        sfs.ex_score,
+        st.subtask_name,
+        t.task_name,
+        u.u_fname,
+        u.u_lname,
+        p.prefix_name,
+        sfs.snapshot_id
+      FROM snapshot_workload_form s
+      INNER JOIN snapshot_workload_form_info sfs ON s.snapshot_id = sfs.snapshot_id
+      INNER JOIN tb_subtask st ON sfs.subtask_id = st.subtask_id
+      INNER JOIN tb_task t ON st.task_id = t.task_id
+      INNER JOIN tb_users u ON s.as_u_id = u.u_id
+      INNER JOIN tb_prefix p ON u.prefix_id = p.prefix_id
+      WHERE s.formlist_id = ? AND s.as_u_id = ? AND s.status = 1
+      ORDER BY sfs.snapshot_form_id`;
+    db.query(sql, [formlist_id, as_u_id], callback);
+  },
+
+  // ดึงไฟล์จาก snapshot
+  getFilesFromSnapshot: (snapshot_form_id, callback) => {
+    const sql = `
+      SELECT 
+        snapshot_file_id as fileinfo_id,
+        file_name,
+        file_path,
+        file_size,
+        file_type
+      FROM snapshot_workload_file_info 
+      WHERE snapshot_form_id = ?`;
+    db.query(sql, [snapshot_form_id], callback);
+  },
+
+  // ดึงลิงก์จาก snapshot
+  getLinksFromSnapshot: (snapshot_form_id, callback) => {
+    const sql = `
+      SELECT 
+        snapshot_link_id as link_id,
+        link_name,
+        link_path
+      FROM snapshot_workload_link_info 
+      WHERE snapshot_form_id = ?`;
+    db.query(sql, [snapshot_form_id], callback);
+  },
+
+  // ตรวจสอบว่ามี snapshot หรือไม่
+  checkSnapshotExists: (formlist_id, as_u_id, round_list_id, callback) => {
+    const sql = `
+      SELECT snapshot_id 
+      FROM snapshot_workload_form 
+      WHERE formlist_id = ? AND as_u_id = ? AND round_list_id = ? AND status = 1`;
+    db.query(sql, [formlist_id, as_u_id, round_list_id], callback);
+  },
+
+  // ดึงข้อมูลฟอร์มทั้งหมดจาก snapshot (ไม่จำกัด subtask_id)
+  getAllFormInfoFromSnapshot: (formlist_id, as_u_id, callback) => {
+    const sql = `
+      SELECT 
+        sf.original_form_id as form_id,
+        sf.subtask_id,
+        st.task_id,
+        st.task_name,
+        sst.subtask_name,
+        st.workload_group_id,
+        st.workload_group_name,
+        st.quantity_workload_hours,
+        sf.form_title,
+        sf.description,
+        sf.workload,
+        sf.quality,
+        sf.file_type,
+        sf.ex_score
+      FROM snapshot_workload_form_info sf
+      INNER JOIN snapshot_workload_form swf ON sf.snapshot_id = swf.snapshot_id
+      INNER JOIN snapshot_workload_task st ON st.snapshot_id = sf.snapshot_id AND st.task_id = sf.task_id
+      INNER JOIN snapshot_workload_subtask sst ON sst.snapshot_id = sf.snapshot_id AND sst.task_id = sf.task_id AND sst.subtask_id = sf.subtask_id
+      WHERE swf.formlist_id = ? AND swf.as_u_id = ?
+      ORDER BY st.task_id, sf.subtask_id, sf.original_form_id`;
+    db.query(sql, [formlist_id, as_u_id], callback);
+  },
+
+  // ดึง formlist_id จาก as_u_id และ round_list_id
+  getFormlistId: (as_u_id, round_list_id, callback) => {
+    const sql = `
+      SELECT f.formlist_id, f.set_asses_list_id, f.status
+      FROM tb_workload_formlist f
+      INNER JOIN tb_set_assessorlist s ON f.set_asses_list_id = s.set_asses_list_id
+      WHERE s.as_u_id = ? AND s.round_list_id = ?`;
+    db.query(sql, [as_u_id, round_list_id], callback);
+  },
 }
 
 module.exports = WorkloadForm

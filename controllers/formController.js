@@ -337,8 +337,8 @@ const addFormInfo = (req, res) => {
     subtask_id: Number.parseInt(subtask_id),
     form_title,
     description: description || "",
-    workload: Number.parseInt(workload),
-    quality: Number.parseInt(quality),
+    workload: parseFloat(workload),
+    quality: parseFloat(quality),
     file_type,
     ex_score: Number.parseInt(ex_score) || 0,
   }
@@ -943,8 +943,8 @@ const updateFormInfo = (req, res) => {
       form_id: Number.parseInt(form_id),
       form_title,
       description: description || "",
-      workload: Number.parseInt(workload),
-      quality: Number.parseInt(quality),
+      workload: parseFloat(workload),
+      quality: parseFloat(quality),
       file_type,
       ex_score: Number.parseInt(ex_score) || 0,
     }

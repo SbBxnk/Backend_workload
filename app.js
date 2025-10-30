@@ -31,6 +31,16 @@ app.use(cors(
 // Serve uploaded files statically
 app.use('/files', express.static('uploads'));
 
+// Also serve profile images directory if configured (useful in Docker)
+const fs = require('fs');
+const profileDir = process.env.PROFILE_UPLOAD_DIR;
+if (profileDir && fs.existsSync(profileDir)) {
+  app.use('/profile', express.static(profileDir));
+  console.log('Serving profile images from:', profileDir, 'at /profile');
+} else {
+  console.log('PROFILE_UPLOAD_DIR not set or not found, /profile static route disabled');
+}
+
 readdirSync('./routes').map((r) => {
     try {
         const route = require('./routes/' + r);

@@ -2,23 +2,41 @@ const multer = require("multer")
 const path = require("path")
 const fs = require("fs")
 
-// Define the upload directory path
-// Check if running in Docker container or local development
-const isDocker = process.env.NODE_ENV === 'development' && fs.existsSync('/app');
-const uploadDir = isDocker 
-    ? path.resolve('/app/uploads')  // Docker path for uploads
-    : path.resolve(__dirname, "../uploads"); // Local development path for uploads
+// Define base directories
+// Priority for profile: env PROFILE_UPLOAD_DIR -> frontend/public/profile -> backend/uploads (fallback)
+const envDir = process.env.PROFILE_UPLOAD_DIR ? path.resolve(process.env.PROFILE_UPLOAD_DIR) : null
+const backendDir = path.resolve(__dirname, "..")
+const projectRoot = path.resolve(backendDir, "..")
+const preferredFrontendProfileDir = path.resolve(projectRoot, "frontend/public/profile")
+const preferredFrontendImagesDir = path.resolve(projectRoot, "frontend/public/images")
+const preferredFrontendFilesDir = path.resolve(projectRoot, "frontend/public/files")
+const backendUploadsFallback = path.resolve(backendDir, "uploads")
 
-// Create the directory if it doesn't exist
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true })
+// Ensure directories exist if used
+const ensureDir = (dirPath) => {
+  try {
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true })
+    return true
+  } catch {
+    return false
+  }
 }
 
+// Default uploadDir for non-workload routes (profile images)
+let defaultProfileDir = envDir || preferredFrontendProfileDir
+if (!ensureDir(defaultProfileDir)) {
+  defaultProfileDir = backendUploadsFallback
+  ensureDir(defaultProfileDir)
+}
+
+// (Dirs ensured on demand in ensureDir and destination)
+
 // Debug logging
-console.log('File Upload Middleware Debug:');
-console.log('isDocker:', isDocker);
-console.log('uploadDir:', uploadDir);
-console.log('Directory exists:', fs.existsSync(uploadDir));
+console.log('File Upload Middleware Debug:')
+console.log('PROFILE_UPLOAD_DIR (env):', process.env.PROFILE_UPLOAD_DIR || '-')
+console.log('Default profile dir:', defaultProfileDir)
+console.log('Images dir (frontend):', preferredFrontendImagesDir)
+console.log('Files dir (frontend):', preferredFrontendFilesDir)
 
 // Function to get a unique filename by adding (n) to the end
 const getUniqueFilename = (originalName, uploadDir) => {
@@ -44,7 +62,19 @@ const getUniqueFilename = (originalName, uploadDir) => {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir)
+    // Route workload_form uploads
+    const isWorkloadForm = typeof req.path === 'string' && req.path.includes('/workload_form')
+    if (isWorkloadForm) {
+      const isImage = /^image\//.test(file.mimetype)
+      const targetDir = isImage ? preferredFrontendImagesDir : preferredFrontendFilesDir
+      if (!ensureDir(targetDir)) {
+        // fallback to backend uploads if cannot ensure
+        return cb(null, backendUploadsFallback)
+      }
+      return cb(null, targetDir)
+    }
+    // Default: profile images
+    cb(null, defaultProfileDir)
   },
   filename: (req, file, cb) => {
     // Sanitize the filename
@@ -52,11 +82,9 @@ const storage = multer.diskStorage({
     const fileNameWithoutExt = path.basename(file.originalname, fileExtension)
     const sanitizedFileName = Buffer.from(fileNameWithoutExt, "latin1").toString("utf8")
 
-    // Create sanitized original name
-    const sanitizedOriginalName = `${sanitizedFileName}${fileExtension}`
-
-    // Get unique filename with (n) if needed
-    const uniqueFilename = getUniqueFilename(sanitizedOriginalName, uploadDir)
+    // Generate collision-resistant filename without needing target dir reference
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`
+    const uniqueFilename = `${sanitizedFileName}-${uniqueSuffix}${fileExtension}`
 
     // Log file information
     console.log(`Uploading file: ${uniqueFilename}, type: ${file.mimetype}, size: ${file.size} bytes`)

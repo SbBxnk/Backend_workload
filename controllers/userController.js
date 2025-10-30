@@ -195,7 +195,7 @@ function formatDate(dateStr) {
     return dateString;
 }
 const register = (req, res) => {
-    upload(req, res, (err) => {
+    upload.single('u_img')(req, res, (err) => {
         if (err) {
             console.log("File upload error:", err);
             return res.status(500).json({ status: "error", message: "Error uploading file" });
@@ -284,7 +284,7 @@ const register = (req, res) => {
 
 
 const updateUser = (req, res) => {
-    upload(req, res, (err) => {
+    upload.single('u_img')(req, res, (err) => {
         if (err) {
             console.error("File upload error:", err);
             return res.status(500).json({ status: "error", message: "Error uploading file" });

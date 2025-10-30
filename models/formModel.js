@@ -619,7 +619,7 @@ const WorkloadForm = {
   },
 
   // คัดลอกไฟล์ไปยัง snapshot
-  copyFilesToSnapshot: (callback) => {
+  copyFilesToSnapshot: (snapshot_id, callback) => {
     const sql = `
       INSERT INTO snapshot_workload_file_info 
       (snapshot_form_id, file_name, file_path, file_size, file_type)
@@ -630,12 +630,13 @@ const WorkloadForm = {
         f.size as file_size,
         'file' as file_type
       FROM tb_workload_file_info f
-      INNER JOIN snapshot_workload_form_info sfs ON f.form_id = sfs.original_form_id`;
-    db.query(sql, callback);
+      INNER JOIN snapshot_workload_form_info sfs ON f.form_id = sfs.original_form_id
+      WHERE sfs.snapshot_id = ?`;
+    db.query(sql, [snapshot_id], callback);
   },
 
   // คัดลอกลิงก์ไปยัง snapshot
-  copyLinksToSnapshot: (callback) => {
+  copyLinksToSnapshot: (snapshot_id, callback) => {
     const sql = `
       INSERT INTO snapshot_workload_link_info 
       (snapshot_form_id, link_name, link_path)
@@ -644,8 +645,9 @@ const WorkloadForm = {
         l.link_name,
         l.link_path
       FROM tb_workload_link_info l
-      INNER JOIN snapshot_workload_form_info sfs ON l.form_id = sfs.original_form_id`;
-    db.query(sql, callback);
+      INNER JOIN snapshot_workload_form_info sfs ON l.form_id = sfs.original_form_id
+      WHERE sfs.snapshot_id = ?`;
+    db.query(sql, [snapshot_id], callback);
   },
 
   // ดึงข้อมูลฟอร์มจาก snapshot (สำหรับ status = 1)
@@ -729,12 +731,17 @@ const WorkloadForm = {
         sf.workload,
         sf.quality,
         sf.file_type,
-        sf.ex_score
+        sf.ex_score,
+        COALESCE(GROUP_CONCAT(DISTINCT f.file_name SEPARATOR ', '), '') as files,
+        COALESCE(GROUP_CONCAT(DISTINCT CONCAT(l.link_name, '|', l.link_path) SEPARATOR ', '), '') as links
       FROM snapshot_workload_form_info sf
       INNER JOIN snapshot_workload_form swf ON sf.snapshot_id = swf.snapshot_id
       INNER JOIN snapshot_workload_task st ON st.snapshot_id = sf.snapshot_id AND st.task_id = sf.task_id
       INNER JOIN snapshot_workload_subtask sst ON sst.snapshot_id = sf.snapshot_id AND sst.task_id = sf.task_id AND sst.subtask_id = sf.subtask_id
+      LEFT JOIN snapshot_workload_file_info f ON f.snapshot_form_id = sf.snapshot_form_id
+      LEFT JOIN snapshot_workload_link_info l ON l.snapshot_form_id = sf.snapshot_form_id
       WHERE swf.formlist_id = ? AND swf.as_u_id = ?
+      GROUP BY sf.snapshot_form_id, sf.original_form_id, sf.subtask_id, st.task_id, st.task_name, sst.subtask_name, st.workload_group_id, st.workload_group_name, st.quantity_workload_hours, sf.form_title, sf.description, sf.workload, sf.quality, sf.file_type, sf.ex_score
       ORDER BY st.task_id, sf.subtask_id, sf.original_form_id`;
     db.query(sql, [formlist_id, as_u_id], callback);
   },

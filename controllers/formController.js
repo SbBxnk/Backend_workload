@@ -1673,7 +1673,7 @@ const submitFormWithSnapshot = (req, res) => {
                 }
 
                 // 6. คัดลอกไฟล์
-                WorkloadForm.copyFilesToSnapshot((filesError) => {
+                WorkloadForm.copyFilesToSnapshot(snapshotId, (filesError) => {
                   if (filesError) {
                     console.error('Error copying files:', filesError);
                     reject(filesError);
@@ -1681,7 +1681,7 @@ const submitFormWithSnapshot = (req, res) => {
                   }
 
                   // 7. คัดลอกลิงก์
-                  WorkloadForm.copyLinksToSnapshot((linksError) => {
+                  WorkloadForm.copyLinksToSnapshot(snapshotId, (linksError) => {
                     if (linksError) {
                       console.error('Error copying links:', linksError);
                       reject(linksError);
@@ -1779,46 +1779,27 @@ const getFormInfoWithSnapshot = (req, res) => {
             ));
           }
 
-          // ดึงไฟล์และลิงก์สำหรับแต่ละฟอร์ม
-          const processSnapshotData = async () => {
-            const processedData = [];
-            
-            for (const form of snapshotResult) {
-              const formData = { ...form, files: [], links: [] };
-              
-              // ดึงไฟล์
-              await new Promise((resolve) => {
-                WorkloadForm.getFilesFromSnapshot(form.form_id, (fileError, files) => {
-                  if (!fileError && files) {
-                    formData.files = files;
-                  }
-                  resolve();
-                });
-              });
-              
-              // ดึงลิงก์
-              await new Promise((resolve) => {
-                WorkloadForm.getLinksFromSnapshot(form.form_id, (linkError, links) => {
-                  if (!linkError && links) {
-                    formData.links = links;
-                  }
-                  resolve();
-                });
-              });
-              
-              processedData.push(formData);
-            }
-            
-            return processedData;
-          };
+          // แปลงผล GROUP_CONCAT (string) เป็น array ของไฟล์/ลิงก์ ก่อนส่งออก
+          const processedData = (snapshotResult || []).map((row) => {
+            const files = typeof row.files === 'string' && row.files.trim()
+              ? row.files.split(', ').map((f) => ({ file_name: f.trim() }))
+              : Array.isArray(row.files) ? row.files : [];
 
-          processSnapshotData().then((processedData) => {
-            return res.status(200).json(createResponse(
-              true,
-              "ดึงข้อมูลจาก snapshot สำเร็จ",
-              processedData
-            ));
+            const links = typeof row.links === 'string' && row.links.trim()
+              ? row.links.split(', ').map((s) => {
+                  const [link_name = '', link_path = ''] = s.split('|');
+                  return { link_name, link_path };
+                })
+              : Array.isArray(row.links) ? row.links : [];
+
+            return { ...row, files, links };
           });
+
+          return res.status(200).json(createResponse(
+            true,
+            "ดึงข้อมูลจาก snapshot สำเร็จ",
+            processedData
+          ));
         });
     } else {
       // ถ้าไม่มี snapshot ให้ดึงจากตารางหลัก

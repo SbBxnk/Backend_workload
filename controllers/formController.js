@@ -502,7 +502,7 @@ const getFilesRound = (req, res) => {
 
     const filesWithUrls = result.map((file) => ({
       ...file,
-      url: `/images/${file.file_name}`,
+      url: `/files/${file.file_name}`,
     }))
 
     res.send({ status: true, data: filesWithUrls })

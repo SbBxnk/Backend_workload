@@ -4,7 +4,9 @@ const WorkloadForm = {
   getTermForm: (callback) => {
     const sql = ` 
                 SELECT
+                    tb_task.task_id,
                     tb_task.task_name,
+                    tb_workload_group.workload_group_id,
                     tb_workload_group.workload_group_name,
                     tb_quantity_workload.quantity_workload_hours
                 FROM
@@ -16,7 +18,8 @@ const WorkloadForm = {
                 LEFT JOIN 
                     tb_task 
                 ON 
-                    tb_task.task_id = tb_quantity_workload.task_id`
+                    tb_task.task_id = tb_quantity_workload.task_id
+                ORDER BY tb_task.task_id ASC, tb_workload_group.workload_group_id ASC`
     db.query(sql, callback)
   },
 
@@ -643,7 +646,7 @@ const WorkloadForm = {
       SELECT 
         sfs.snapshot_form_id,
         l.link_name,
-        l.link_path
+        LEFT(l.link_path, 2000)
       FROM tb_workload_link_info l
       INNER JOIN snapshot_workload_form_info sfs ON l.form_id = sfs.original_form_id
       WHERE sfs.snapshot_id = ?`;

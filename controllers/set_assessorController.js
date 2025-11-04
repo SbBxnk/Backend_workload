@@ -12,13 +12,17 @@ const getAllRoundlist = (req, res) => {
         year = ''
     } = req.query;
     
+    // ดึง as_u_id จาก token (req.user.id) สำหรับเช็ค status เฉพาะของผู้ใช้ที่ login
+    const as_u_id = req.user?.id || null;
+    
     const params = {
         search,
         limit: parseInt(limit),
         page: parseInt(page),
         sort,
         order,
-        year
+        year,
+        as_u_id
     };
     
     // Generate transaction code

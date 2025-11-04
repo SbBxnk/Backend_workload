@@ -11,7 +11,8 @@ const Assessor = {
             page = 1, 
             sort = 'date_save', 
             order = 'desc',
-            year = ''
+            year = '',
+            as_u_id = null
         } = params || {};
         
         const offset = (page - 1) * limit;
@@ -42,15 +43,27 @@ const Assessor = {
             ${searchCondition}
         `;
         
-        const dataSql = `
-            SELECT
-                round_list_id,
-                round_list_name,
-                date_start,
-                date_end,
-                round,
-                date_save,
-                year,
+        // เช็ค has_completed_forms เฉพาะของผู้ใช้ที่ login (as_u_id)
+        // ถ้ามี as_u_id ให้เช็คเฉพาะ form ของผู้ใช้คนนั้น
+        // ถ้าไม่มี as_u_id ให้เช็คแบบเดิม (เช็คทั้งรอบ)
+        let hasCompletedFormsCase = '';
+        if (as_u_id) {
+            // เช็คเฉพาะ form ของผู้ใช้ที่ login
+            hasCompletedFormsCase = `
+                CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM tb_workload_formlist wfl
+                        INNER JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
+                        WHERE sal.round_list_id = tb_set_roundlist.round_list_id 
+                        AND sal.as_u_id = ${as_u_id}
+                        AND wfl.status = 1
+                    ) THEN 1
+                    ELSE 0
+                END as has_completed_forms
+            `;
+        } else {
+            // ถ้าไม่มี as_u_id ให้เช็คแบบเดิม (เช็คทั้งรอบ)
+            hasCompletedFormsCase = `
                 CASE 
                     WHEN EXISTS (
                         SELECT 1 FROM tb_workload_formlist wfl
@@ -60,6 +73,19 @@ const Assessor = {
                     ) THEN 1
                     ELSE 0
                 END as has_completed_forms
+            `;
+        }
+        
+        const dataSql = `
+            SELECT
+                round_list_id,
+                round_list_name,
+                date_start,
+                date_end,
+                round,
+                date_save,
+                year,
+                ${hasCompletedFormsCase}
             FROM tb_set_roundlist
             ${searchCondition}
             ORDER BY year DESC, round DESC, ${sortField} ${sortOrder}

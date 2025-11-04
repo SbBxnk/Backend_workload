@@ -1,4 +1,6 @@
-const {readdirSync} = require('fs')
+const fs = require('fs')
+const path = require('path')
+const {readdirSync} = fs
 const morgan = require('morgan')
 const express = require('express');
 const cors = require('cors');
@@ -28,11 +30,48 @@ app.use(cors(
     {origin: 'http://localhost:3000'}
 ));
 
-// Serve uploaded files statically
-app.use('/files', express.static('uploads'));
+// Serve uploaded files statically from backend/uploads for legacy files
+app.use('/uploads', express.static('uploads'));
+
+// Determine if running in Docker
+const isDocker = __dirname === '/app'
+console.log('App.js - Running in Docker:', isDocker, '__dirname:', __dirname)
+
+// Serve images and files
+let frontendImagesDir, frontendFilesDir, workloadUploadsDir;
+
+if (isDocker) {
+  // Use Docker mounted frontend directories
+  frontendImagesDir = '/frontend/public/images';
+  frontendFilesDir = '/frontend/public/files';
+  workloadUploadsDir = '/frontend/public/files'; // Use files directory for workload uploads
+} else {
+  // Local development paths
+  frontendImagesDir = path.resolve(__dirname, '../frontend/public/images');
+  frontendFilesDir = path.resolve(__dirname, '../frontend/public/files');
+  workloadUploadsDir = frontendImagesDir;
+}
+
+console.log('Frontend images dir:', frontendImagesDir)
+console.log('Frontend files dir:', frontendFilesDir)
+console.log('Workload uploads dir:', workloadUploadsDir)
+
+// Serve workload files from the upload location
+if (fs.existsSync(workloadUploadsDir)) {
+  app.use('/files', express.static(workloadUploadsDir));
+  console.log('Serving workload files from:', workloadUploadsDir, 'at /files');
+}
+
+if (fs.existsSync(frontendImagesDir)) {
+  app.use('/images', express.static(frontendImagesDir));
+  console.log('Serving images from:', frontendImagesDir, 'at /images');
+}
+
+if (fs.existsSync(frontendFilesDir)) {
+  console.log('Frontend files directory exists:', frontendFilesDir);
+}
 
 // Also serve profile images directory if configured (useful in Docker)
-const fs = require('fs');
 const profileDir = process.env.PROFILE_UPLOAD_DIR;
 if (profileDir && fs.existsSync(profileDir)) {
   app.use('/profile', express.static(profileDir));

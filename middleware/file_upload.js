@@ -7,17 +7,53 @@ const fs = require("fs")
 const envDir = process.env.PROFILE_UPLOAD_DIR ? path.resolve(process.env.PROFILE_UPLOAD_DIR) : null
 const backendDir = path.resolve(__dirname, "..")
 const projectRoot = path.resolve(backendDir, "..")
-const preferredFrontendProfileDir = path.resolve(projectRoot, "frontend/public/profile")
-const preferredFrontendImagesDir = path.resolve(projectRoot, "frontend/public/images")
-const preferredFrontendFilesDir = path.resolve(projectRoot, "frontend/public/files")
-const backendUploadsFallback = path.resolve(backendDir, "uploads")
+
+// Check if we're in Docker (working dir is /app)
+const isDocker = backendDir === '/app'
+console.log('Environment detection - backendDir:', backendDir, 'isDocker:', isDocker)
+
+// Use different paths for Docker vs local
+let preferredFrontendProfileDir
+let preferredFrontendImagesDir  
+let preferredFrontendFilesDir
+let backendUploadsFallback
+
+if (isDocker) {
+  // Docker volume mounts - use frontend directories mounted in Docker
+  preferredFrontendProfileDir = '/app/frontend_public/profile'
+  // Use frontend public directories from Docker volumes
+  preferredFrontendImagesDir = '/frontend/public/images'
+  preferredFrontendFilesDir = '/frontend/public/files'
+  backendUploadsFallback = '/app/uploads'
+} else {
+  // Local development - use relative paths
+  preferredFrontendProfileDir = path.resolve(projectRoot, "frontend/public/profile")
+  preferredFrontendImagesDir = path.resolve(projectRoot, "frontend/public/images")
+  preferredFrontendFilesDir = path.resolve(projectRoot, "frontend/public/files")
+  backendUploadsFallback = path.resolve(backendDir, "uploads")
+}
 
 // Ensure directories exist if used
 const ensureDir = (dirPath) => {
   try {
-    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true })
+    if (!fs.existsSync(dirPath)) {
+      console.log(`Attempting to create directory: ${dirPath}`)
+      fs.mkdirSync(dirPath, { recursive: true })
+      console.log(`Successfully created directory: ${dirPath}`)
+    } else {
+      console.log(`Directory already exists: ${dirPath}`)
+    }
+    // Check write permissions
+    try {
+      fs.accessSync(dirPath, fs.constants.W_OK)
+      console.log(`Directory is writable: ${dirPath}`)
+    } catch (err) {
+      console.error(`Directory is NOT writable: ${dirPath}`, err.message)
+      return false
+    }
     return true
-  } catch {
+  } catch (err) {
+    console.error(`Failed to create or access directory: ${dirPath}`, err.message)
     return false
   }
 }
@@ -33,10 +69,14 @@ if (!ensureDir(defaultProfileDir)) {
 
 // Debug logging
 console.log('File Upload Middleware Debug:')
+console.log('__dirname:', __dirname)
+console.log('backendDir:', backendDir)
+console.log('projectRoot:', projectRoot)
 console.log('PROFILE_UPLOAD_DIR (env):', process.env.PROFILE_UPLOAD_DIR || '-')
 console.log('Default profile dir:', defaultProfileDir)
 console.log('Images dir (frontend):', preferredFrontendImagesDir)
 console.log('Files dir (frontend):', preferredFrontendFilesDir)
+console.log('Backend uploads fallback:', backendUploadsFallback)
 
 // Function to get a unique filename by adding (n) to the end
 const getUniqueFilename = (originalName, uploadDir) => {
@@ -65,12 +105,20 @@ const storage = multer.diskStorage({
     // Route workload_form uploads
     const isWorkloadForm = typeof req.path === 'string' && req.path.includes('/workload_form')
     if (isWorkloadForm) {
-      const isImage = /^image\//.test(file.mimetype)
-      const targetDir = isImage ? preferredFrontendImagesDir : preferredFrontendFilesDir
+      // Save all workload files to files directory
+      let targetDir = preferredFrontendFilesDir
+      
+      console.log(`Setting up directory for workload form: ${targetDir}`)
+      
+      // Try to ensure directory exists
       if (!ensureDir(targetDir)) {
+        console.warn(`Failed to create directory: ${targetDir}, using fallback`)
         // fallback to backend uploads if cannot ensure
-        return cb(null, backendUploadsFallback)
+        targetDir = backendUploadsFallback
+        ensureDir(backendUploadsFallback)
       }
+      
+      console.log(`Final upload directory: ${targetDir}`)
       return cb(null, targetDir)
     }
     // Default: profile images

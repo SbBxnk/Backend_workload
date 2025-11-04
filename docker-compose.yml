@@ -38,6 +38,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=development
+      - PROFILE_UPLOAD_DIR=/app/frontend_public/profile
       - DB_HOST=workload_mysql
       - DB_USER=root
       - DB_PASS=rootpassword
@@ -53,6 +54,8 @@ services:
       - .:/app
       - /app/node_modules
       - ../frontend/public/images:/frontend/public/images
+      - ../frontend/public/files:/frontend/public/files
+      - ../frontend/public/profile:/app/frontend_public/profile
     depends_on:
       - mysql
     networks:

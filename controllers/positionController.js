@@ -144,6 +144,7 @@ const updatePosition = (req, res) => {
     const id = req.params.position_id;
     const PositionDetail = {
         position_name: req.body.position_name,
+        position_short_name: req.body.position_short_name,
     };
     Position.getOnePosition(id, (error, result) => {
         if (error) {

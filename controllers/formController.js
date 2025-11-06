@@ -1680,7 +1680,7 @@ const submitFormWithSnapshot = (req, res) => {
                     return;
                   }
 
-                  // 7. คัดลอกลิงก์
+                                      // 7. คัดลอกลิงก์
                   WorkloadForm.copyLinksToSnapshot(snapshotId, (linksError) => {
                     if (linksError) {
                       console.error('Error copying links:', linksError);
@@ -1699,9 +1699,54 @@ const submitFormWithSnapshot = (req, res) => {
     });
   };
 
-  // ดำเนินการสร้าง snapshot
-  createSnapshot()
-    .then((snapshotId) => {
+  // สร้าง snapshot ของ performance evaluation
+  const createPerformanceSnapshot = () => {
+    return new Promise((resolve, reject) => {
+      const Performance = require('../models/performanceModel');
+      
+      // 1. ลบ snapshot performance เก่า (ถ้ามี)
+      Performance.deleteExistingPerformanceSnapshot(formlist_id, as_u_id, round_list_id, (deleteError) => {
+        if (deleteError) {
+          console.error('Error deleting existing performance snapshot:', deleteError);
+          reject(deleteError);
+          return;
+        }
+
+        // 2. สร้าง snapshot performance ใหม่
+        Performance.createPerformanceSnapshot(formlist_id, as_u_id, round_list_id, (createError, createResult) => {
+          if (createError) {
+            console.error('Error creating performance snapshot:', createError);
+            reject(createError);
+            return;
+          }
+
+          const snapshotPerfId = createResult.insertId;
+          console.log('Created performance snapshot with ID:', snapshotPerfId);
+
+          // 3. คัดลอกข้อมูล performance evaluation ไป snapshot (ถ้ามีข้อมูล)
+          Performance.copyPerformanceEvaluationToSnapshot(snapshotPerfId, formlist_id, (copyError) => {
+            if (copyError) {
+              // ถ้าไม่มีข้อมูล performance evaluation จะไม่ error แต่จะสร้าง snapshot เปล่า
+              console.warn('No performance evaluation data to copy (or error):', copyError.message || copyError);
+              // ยังคง resolve เพื่อให้ snapshot ถูกสร้าง (แม้จะไม่มี detail)
+            } else {
+              console.log('Performance evaluation data copied to snapshot');
+            }
+
+            console.log('Performance snapshot created successfully');
+            resolve(snapshotPerfId);
+          });
+        });
+      });
+    });
+  };
+
+  // ดำเนินการสร้าง snapshot ทั้ง workload และ performance
+  Promise.all([
+    createSnapshot(), // สร้าง snapshot workload form
+    createPerformanceSnapshot() // สร้าง snapshot performance evaluation
+  ])
+    .then(([snapshotId, snapshotPerfId]) => {
       // อัปเดต status ใน tb_workload_formlist
       WorkloadForm.updateWorkloadFormStatus(formlist_id, 1, (statusError, statusResult) => {
         if (statusError) {
@@ -1719,6 +1764,7 @@ const submitFormWithSnapshot = (req, res) => {
           "ส่งฟอร์มและสร้าง snapshot สำเร็จ",
           {
             snapshot_id: snapshotId,
+            snapshot_performance_id: snapshotPerfId,
             formlist_id: formlist_id,
             status: 1
           }

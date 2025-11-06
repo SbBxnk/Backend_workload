@@ -37,7 +37,8 @@ const Position = {
         const dataSql = `
             SELECT 
                 position_id,
-                position_name
+                position_name,
+                position_short_name
             FROM tb_position 
             ${searchCondition}
             ORDER BY ${sortField} ${sortOrder}
@@ -90,11 +91,12 @@ const Position = {
     },
 
     updatePosition: (position_id, PositionDetail, callback) => {
-        const { position_name } = PositionDetail;
+        const { position_name, position_short_name } = PositionDetail;
         const sql = `UPDATE tb_position 
-                     SET position_name = ?
+                     SET position_name = ?,
+                         position_short_name = ?
                      WHERE position_id = ?`;
-        db.query(sql, [position_name, position_id], callback)
+        db.query(sql, [position_name, position_short_name || null, position_id], callback)
     },
 
 }

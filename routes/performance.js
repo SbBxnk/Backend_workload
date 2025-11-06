@@ -11,7 +11,12 @@ const {
   addOrUpdatePerformanceEvaluationBulk,
   getPerformanceEvaluationForm,
   addExpectedLevel,
-  getPerformanceSnapshot
+  getPerformanceSnapshot,
+  getAllPerformanceTerms,
+  getOnePerformanceTerm,
+  addPerformanceTerm,
+  updatePerformanceTerm,
+  deletePerformanceTerm
 } = require('../controllers/performanceController');
 const  auth  = require('../middleware/auth');
 
@@ -35,6 +40,13 @@ router.post('/performance/expected-level', auth, addExpectedLevel);
 
 // Routes สำหรับ snapshot performance evaluation
 router.get('/performance/snapshot', auth, getPerformanceSnapshot);
+
+// Routes สำหรับจัดการ performance term (ระดับสมรรถนะที่คาดหวังสำหรับแต่ละตำแหน่ง)
+router.get('/performance/term', auth, getAllPerformanceTerms); //read
+router.get('/performance/term/:expected_level_id', auth, getOnePerformanceTerm); // select one
+router.post('/performance/term/add', auth, addPerformanceTerm) //create
+router.put('/performance/term/update/:expected_level_id', auth, updatePerformanceTerm)  //update
+router.delete('/performance/term/delete/:expected_level_id', auth, deletePerformanceTerm) // delete
 
 module.exports = router;
 

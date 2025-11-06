@@ -347,6 +347,198 @@ const addExpectedLevel = (req, res) => {
   });
 };
 
+// Helper function to generate transaction code
+const generateTransactionCode = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// ดึงข้อมูล performance term ทั้งหมด (พร้อม pagination)
+const getAllPerformanceTerms = (req, res) => {
+  const { 
+    search = '', 
+    limit = 100, 
+    page = 1, 
+    sort = 'competency_order', 
+    order = 'asc' 
+  } = req.query;
+  
+  const params = {
+    search,
+    limit: parseInt(limit),
+    page: parseInt(page),
+    sort,
+    order
+  };
+  
+  Performance.getAllPerformanceTerms(params, (error, result) => {
+    if (error) {
+      return res.status(500).json({
+        code: 500,
+        timestamp: new Date().toISOString(),
+        transactionCode: generateTransactionCode(),
+        success: false,
+        titleMessage: "error",
+        message: "การเชื่อมต่อข้อมูลผิดพลาด",
+        errorCode: "DATABASE_ERROR",
+        meta: null,
+        payload: []
+      });
+    }
+    
+    if (!result || !result.data || result.data.length === 0) {
+      return res.status(200).json({
+        code: 200,
+        timestamp: new Date().toISOString(),
+        transactionCode: generateTransactionCode(),
+        success: true,
+        titleMessage: "success",
+        message: "success",
+        errorCode: "",
+        meta: {
+          limit: parseInt(limit),
+          page: parseInt(page),
+          sort: sort,
+          total_rows: 0,
+          total_pages: 0
+        },
+        payload: []
+      });
+    }
+    
+    res.status(200).json({
+      code: 200,
+      timestamp: new Date().toISOString(),
+      transactionCode: generateTransactionCode(),
+      success: true,
+      titleMessage: "success",
+      message: "success",
+      errorCode: "",
+      meta: result.meta,
+      payload: result.data
+    });
+  });
+};
+
+// ดึงข้อมูล performance term ตาม ID
+const getOnePerformanceTerm = (req, res) => {
+  const id = req.params.expected_level_id;
+  Performance.getOnePerformanceTerm(id, (error, result) => {
+    if (error) {
+      return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+    }
+    else if (!result || result.length === 0) {
+      return res.status(404).send({ status: false, error: 'ไม่พบข้อมูลระดับสมรรถนะที่คาดหวัง' });
+    } else {
+      return res.send({
+        status: true,
+        expected_level_id: id,
+        data: result[0]
+      });
+    }
+  });
+}
+
+// เพิ่มข้อมูล performance term
+const addPerformanceTerm = (req, res) => {
+  const PerformanceTermDetail = req.body;
+  
+  if (!PerformanceTermDetail.competency_id || !PerformanceTermDetail.position_id || !PerformanceTermDetail.expected_level) {
+    return res.status(400).send({ status: false, error: 'กรุณาระบุ competency_id, position_id และ expected_level' });
+  }
+  
+  if (PerformanceTermDetail.expected_level < 1 || PerformanceTermDetail.expected_level > 5) {
+    return res.status(400).send({ status: false, error: 'expected_level ต้องอยู่ระหว่าง 1-5' });
+  }
+  
+  Performance.addPerformanceTerm(PerformanceTermDetail, (error, result) => {
+    if (error) {
+      return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+    }
+    else {
+      return res.send({
+        status: true,
+        message: 'เพิ่มระดับสมรรถนะที่คาดหวัง สำเร็จ',
+      });
+    }
+  });
+}
+
+// แก้ไขข้อมูล performance term
+const updatePerformanceTerm = (req, res) => {
+  const id = req.params.expected_level_id;
+  const PerformanceTermDetail = {
+    competency_id: req.body.competency_id,
+    position_id: req.body.position_id,
+    expected_level: req.body.expected_level,
+  };
+  
+  if (!PerformanceTermDetail.expected_level) {
+    return res.status(400).send({ status: false, error: 'กรุณาระบุ expected_level' });
+  }
+  
+  if (PerformanceTermDetail.expected_level < 1 || PerformanceTermDetail.expected_level > 5) {
+    return res.status(400).send({ status: false, error: 'expected_level ต้องอยู่ระหว่าง 1-5' });
+  }
+  
+  Performance.getOnePerformanceTerm(id, (error, result) => {
+    if (error) {
+      return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+    }
+    else if (!result || result.length === 0) {
+      return res.status(404).send({ status: false, error: 'ไม่พบข้อมูลระดับสมรรถนะที่คาดหวัง' });
+    }
+
+    Performance.updatePerformanceTerm(id, PerformanceTermDetail, (error, result) => {
+      if (error) {
+        return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+      }
+      else if (result.affectedRows === 0) {
+        return res.status(404).send({ status: false, error: 'ไม่พบข้อมูลระดับสมรรถนะที่คาดหวัง' });
+      }
+      else {
+        return res.send({
+          status: true,
+          update_at: id,
+          message: 'แก้ไขข้อมูลระดับสมรรถนะที่คาดหวัง สำเร็จ'
+        });
+      }
+    });
+  });
+};
+
+// ลบข้อมูล performance term
+const deletePerformanceTerm = (req, res) => {
+  const id = req.params.expected_level_id;
+
+  Performance.getOnePerformanceTerm(id, (error, result) => {
+    if (error) {
+      return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+    }
+    else if (!result || result.length === 0) {
+      return res.status(404).send({ status: false, error: 'ไม่พบข้อมูลระดับสมรรถนะที่คาดหวัง' });
+    }
+    Performance.deleteExpectedLevel(id, (error, result) => {
+      if (error) {
+        return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
+      }
+      else if (result.affectedRows === 0) {
+        return res.status(404).send({ status: false, error: 'ไม่พบข้อมูลระดับสมรรถนะที่คาดหวัง' });
+      }
+      else {
+        res.send({
+          status: true,
+          message: 'ลบข้อมูลระดับสมรรถนะที่คาดหวัง สำเร็จ!',
+        })
+      }
+    });
+
+  });
+};
+
 // ดึงข้อมูล snapshot performance evaluation
 const getPerformanceSnapshot = (req, res) => {
   const { formlist_id, u_id, round_list_id } = req.query;
@@ -418,6 +610,11 @@ module.exports = {
   addOrUpdatePerformanceEvaluationBulk,
   getPerformanceEvaluationForm,
   addExpectedLevel,
-  getPerformanceSnapshot
+  getPerformanceSnapshot,
+  getAllPerformanceTerms,
+  getOnePerformanceTerm,
+  addPerformanceTerm,
+  updatePerformanceTerm,
+  deletePerformanceTerm
 };
 

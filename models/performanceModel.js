@@ -37,13 +37,117 @@ const Performance = {
         pt.expected_level,
         c.competency_name,
         c.competency_order,
-        p.position_name
+        p.position_name,
+        p.position_short_name
       FROM tb_performance_term pt
       INNER JOIN tb_competency c ON pt.competency_id = c.competency_id
       INNER JOIN tb_position p ON pt.position_id = p.position_id
       ORDER BY c.competency_order ASC, p.position_id ASC
     `;
     db.query(sql, callback);
+  },
+
+  // ดึงข้อมูล performance term ทั้งหมดพร้อม pagination
+  getAllPerformanceTerms: (params, callback) => {
+    const { 
+      search = '', 
+      limit = 100, 
+      page = 1, 
+      sort = 'competency_order', 
+      order = 'asc' 
+    } = params || {};
+    
+    const offset = (page - 1) * limit;
+    
+    // Build search condition
+    let searchCondition = '';
+    if (search) {
+      searchCondition = `WHERE c.competency_name LIKE '%${search}%' OR p.position_name LIKE '%${search}%'`;
+    }
+    
+    // Build order clause
+    const validSortFields = ['competency_order', 'competency_name', 'position_name', 'expected_level'];
+    const validOrders = ['asc', 'desc'];
+    const sortField = validSortFields.includes(sort) ? sort : 'competency_order';
+    const sortOrder = validOrders.includes(order.toLowerCase()) ? order.toUpperCase() : 'ASC';
+    
+    // Get total count
+    const countSql = `
+      SELECT COUNT(*) as total 
+      FROM tb_performance_term pt
+      INNER JOIN tb_competency c ON pt.competency_id = c.competency_id
+      INNER JOIN tb_position p ON pt.position_id = p.position_id
+      ${searchCondition}
+    `;
+    
+    // Get paginated data
+    const dataSql = `
+      SELECT 
+        pt.expected_level_id,
+        pt.competency_id,
+        pt.position_id,
+        pt.expected_level,
+        c.competency_name,
+        c.competency_order,
+        p.position_name,
+        p.position_short_name
+      FROM tb_performance_term pt
+      INNER JOIN tb_competency c ON pt.competency_id = c.competency_id
+      INNER JOIN tb_position p ON pt.position_id = p.position_id
+      ${searchCondition}
+      ORDER BY ${sortField} ${sortOrder}, p.position_id ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    
+    // Execute count query first
+    db.query(countSql, (countError, countResult) => {
+      if (countError) {
+        return callback(countError, null);
+      }
+      
+      const totalRows = countResult[0].total;
+      const totalPages = Math.ceil(totalRows / limit);
+      
+      // Execute data query
+      db.query(dataSql, (dataError, dataResult) => {
+        if (dataError) {
+          return callback(dataError, null);
+        }
+        
+        const meta = {
+          limit: parseInt(limit),
+          page: parseInt(page),
+          sort: sortField,
+          total_rows: totalRows,
+          total_pages: totalPages
+        };
+        
+        callback(null, {
+          data: dataResult,
+          meta: meta
+        });
+      });
+    });
+  },
+
+  // ดึงข้อมูล performance term ตาม ID
+  getOnePerformanceTerm: (expected_level_id, callback) => {
+    const sql = `
+      SELECT 
+        pt.expected_level_id,
+        pt.competency_id,
+        pt.position_id,
+        pt.expected_level,
+        c.competency_name,
+        c.competency_order,
+        p.position_name,
+        p.position_short_name
+      FROM tb_performance_term pt
+      INNER JOIN tb_competency c ON pt.competency_id = c.competency_id
+      INNER JOIN tb_position p ON pt.position_id = p.position_id
+      WHERE pt.expected_level_id = ?
+    `;
+    db.query(sql, [expected_level_id], callback);
   },
 
   // ดึงระดับสมรรถนะที่คาดหวังตามตำแหน่ง
@@ -182,6 +286,21 @@ const Performance = {
     db.query(sql, values, callback);
   },
 
+  // เพิ่มข้อมูล performance term ใหม่
+  addPerformanceTerm: (performanceTermData, callback) => {
+    const sql = `
+      INSERT INTO tb_performance_term
+      (competency_id, position_id, expected_level)
+      VALUES (?, ?, ?)
+    `;
+    const values = [
+      performanceTermData.competency_id,
+      performanceTermData.position_id,
+      performanceTermData.expected_level
+    ];
+    db.query(sql, values, callback);
+  },
+
   // อัปเดตข้อมูลระดับสมรรถนะที่คาดหวัง
   updateExpectedLevel: (expected_level_id, expected_level, callback) => {
     const sql = `
@@ -191,6 +310,25 @@ const Performance = {
       WHERE expected_level_id = ?
     `;
     db.query(sql, [expected_level, expected_level_id], callback);
+  },
+
+  // อัปเดตข้อมูล performance term
+  updatePerformanceTerm: (expected_level_id, performanceTermData, callback) => {
+    const sql = `
+      UPDATE tb_performance_term
+      SET competency_id = ?,
+          position_id = ?,
+          expected_level = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE expected_level_id = ?
+    `;
+    const values = [
+      performanceTermData.competency_id,
+      performanceTermData.position_id,
+      performanceTermData.expected_level,
+      expected_level_id
+    ];
+    db.query(sql, values, callback);
   },
 
   // ลบข้อมูลระดับสมรรถนะที่คาดหวัง

@@ -406,7 +406,7 @@ const Assessor = {
         db.query(sql, [as_u_id], callback);
     },
 
-    // รายละเอียดในรายการผู้ตรวจประเมิน
+    // รายละเอียดในรายการผู้ประเมิน
 
     getOnesetAssesorInfo: (set_asses_list_id, params, callback) => {
         const { search = '', limit = 10, page = 1, sort = 'date_save', order = 'desc', ex_position_name = '' } = params;
@@ -662,7 +662,7 @@ const Assessor = {
         db.query(sql, [round_list_id, ex_u_id], callback)
     },
 
-    // ดึงข้อมูลผู้ถูกประเมินจาก set_asses_list_id
+    // ดึงข้อมูลผู้รับการประเมินจาก set_asses_list_id
     getAssesseeBySetAssesListId: (set_asses_list_id, callback) => {
         const sql = `
             SELECT 
@@ -687,7 +687,7 @@ const Assessor = {
         db.query(sql, [set_asses_list_id], callback);
     },
 
-    // ดึงรายการการประเมินสำหรับผู้ตรวจประเมิน (ex_u_id)
+    // ดึงรายการการประเมินสำหรับผู้ประเมิน (ex_u_id)
     getAssessorEvaluations: (ex_u_id, callback) => {
         const sql = `
             SELECT 
@@ -724,7 +724,7 @@ const Assessor = {
         db.query(sql, [ex_u_id], callback);
     },
 
-    // ดึงรอบการประเมินสำหรับผู้ตรวจประเมิน (ex_u_id)
+    // ดึงรอบการประเมินสำหรับผู้ประเมิน (ex_u_id)
     getAssessorRounds: (ex_u_id, callback) => {
         const sql = `
             SELECT DISTINCT

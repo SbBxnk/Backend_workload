@@ -36,10 +36,10 @@ router.get("/check_assessor/:u_id", auth, checkIsAssessor)
 // ดึงข้อมูลผู้ที่ต้องได้รับการประเมินโดยผู้ประเมินที่ระบุ
 router.get("/set_assessor/assigned_examinees/:round_list_id/:ex_u_id", auth, getAssignedExaminees)
 
-// ดึงรายการการประเมินสำหรับผู้ตรวจประเมิน
+// ดึงรายการการประเมินสำหรับผู้ประเมิน
 router.get("/assessor_evaluations/:ex_u_id", auth, getAssessorEvaluations)
 
-// ดึงรอบการประเมินสำหรับผู้ตรวจประเมิน
+// ดึงรอบการประเมินสำหรับผู้ประเมิน
 router.get("/assessor_rounds/:ex_u_id", auth, getAssessorRounds)
 
 // ดึงรายการผู้ใช้ที่ต้องตรวจในรอบการประเมินเฉพาะ

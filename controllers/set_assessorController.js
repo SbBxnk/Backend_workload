@@ -373,7 +373,7 @@ const updateRoundlist = (req, res) => {
 }
 
 
-// รายการแต่งตั้งผู้ตรวจประเมิน_______________________________________________________________________________________________
+// รายการแต่งตั้งผู้ประเมิน_______________________________________________________________________________________________
 
 const getAllsetAssesorList = (req, res) => {
     // Generate transaction code
@@ -532,7 +532,7 @@ const addSetAssessorList = (req, res) => {
                 payload: []
             });
         }
-        // ถ้ามีอยู่แล้วในรอบเดียวกัน ไม่อนุญาต (เฉพาะผู้ถูกประเมินเท่านั้น)
+        // ถ้ามีอยู่แล้วในรอบเดียวกัน ไม่อนุญาต (เฉพาะผู้รับการประเมินเท่านั้น)
         if (result.length > 0) {
             return res.status(200).json({
                 code: 200,
@@ -540,7 +540,7 @@ const addSetAssessorList = (req, res) => {
                 transactionCode: generateTransactionCode(),
                 success: false,
                 titleMessage: "warning",
-                message: "มีผู้ใช้นี้อยู่ในรายการผู้ถูกประเมินของรอบนี้แล้ว",
+                message: "มีผู้ใช้นี้อยู่ในรายการผู้รับการประเมินของรอบนี้แล้ว",
                 errorCode: "DUPLICATE_USER",
                 meta: null,
                 payload: []
@@ -592,7 +592,7 @@ const addSetAssessorListMultiple = (req, res) => {
             transactionCode: generateTransactionCode(),
             success: false,
             titleMessage: "error",
-            message: "ข้อมูลผู้ถูกประเมินไม่ถูกต้อง",
+            message: "ข้อมูลผู้รับการประเมินไม่ถูกต้อง",
             errorCode: "INVALID_DATA",
             meta: null,
             payload: []
@@ -782,7 +782,7 @@ const getOnesetAssesorInfo = (req, res) => {
     });
 };
 
-// ดึงข้อมูลผู้ถูกประเมินจาก set_asses_list_id
+// ดึงข้อมูลผู้รับการประเมินจาก set_asses_list_id
 const getAssesseeBySetAssesListId = (req, res) => {
     const set_asses_list_id = req.params.set_asses_list_id;
     
@@ -814,7 +814,7 @@ const getAssesseeBySetAssesListId = (req, res) => {
                 transactionCode: generateTransactionCode(),
                 success: false,
                 titleMessage: "error",
-                message: "ไม่พบข้อมูลผู้ถูกประเมิน",
+                message: "ไม่พบข้อมูลผู้รับการประเมิน",
                 errorCode: "NOT_FOUND",
                 meta: null,
                 payload: []
@@ -889,7 +889,7 @@ const addSetAssessorInfoMultiple = (req, res) => {
             transactionCode: generateTransactionCode(),
             success: false,
             titleMessage: "error",
-            message: "ข้อมูลผู้ตรวจประเมินไม่ถูกต้อง",
+            message: "ข้อมูลผู้ประเมินไม่ถูกต้อง",
             errorCode: "INVALID_DATA",
             meta: null,
             payload: []
@@ -1056,7 +1056,7 @@ const checkIsAssessor = (req, res) => {
             console.log('❌ Backend - User is not assessor, no records found')
             return res.status(200).send({
                 status: false,
-                message: "ผู้ใช้นี้ไม่ได้เป็นผู้ตรวจประเมินในรอบปัจจุบัน",
+                message: "ผู้ใช้นี้ไม่ได้เป็นผู้ประเมินในรอบปัจจุบัน",
             })
         }
 
@@ -1066,7 +1066,7 @@ const checkIsAssessor = (req, res) => {
         
         return res.status(200).send({
             status: true,
-            message: "ผู้ใช้นี้เป็นผู้ตรวจประเมินในรอบปัจจุบัน",
+            message: "ผู้ใช้นี้เป็นผู้ประเมินในรอบปัจจุบัน",
             data: {
                 assessor_id: assessorData.set_asses_list_id,
                 round_list_id: assessorData.round_list_id
@@ -1100,7 +1100,7 @@ const getAssignedExaminees = (req, res) => {
     })
 }
 
-// ดึงรายการการประเมินสำหรับผู้ตรวจประเมิน
+// ดึงรายการการประเมินสำหรับผู้ประเมิน
 const getAssessorEvaluations = (req, res) => {
     const ex_u_id = req.params.ex_u_id;
     
@@ -1153,7 +1153,7 @@ const getAssessorEvaluations = (req, res) => {
     });
 }
 
-// ดึงรอบการประเมินสำหรับผู้ตรวจประเมิน
+// ดึงรอบการประเมินสำหรับผู้ประเมิน
 const getAssessorRounds = (req, res) => {
     const ex_u_id = req.params.ex_u_id;
     
@@ -1461,7 +1461,7 @@ const checkUserAccessToRound = (req, res) => {
             transactionCode: `TXN_${Date.now()}`,
             success: true,
             titleMessage: "สำเร็จ",
-            message: hasExaminee ? "ผู้ใช้มีสิทธิ์เข้าถึงรอบนี้" : "ผู้ใช้ไม่มีผู้ถูกประเมินในรอบนี้",
+            message: hasExaminee ? "ผู้ใช้มีสิทธิ์เข้าถึงรอบนี้" : "ผู้ใช้ไม่มีผู้รับการประเมินในรอบนี้",
             errorCode: null,
             payload: hasExaminee ? result : null,
             meta: {

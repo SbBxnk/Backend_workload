@@ -248,7 +248,7 @@ const LoginRegis = {
     },
 
 
-    // ดึงรายชื่อที่มีตำแหน่งบริหาร (สำหรับแต่งตั้งผู้ตรวจประเมิน)
+    // ดึงรายชื่อที่มีตำแหน่งบริหาร (สำหรับแต่งตั้งผู้ประเมิน)
     GetAllExUser: (set_asses_list_id, callback) => {
         const sql = `SELECT 
                     u.u_id, u.gender, p.prefix_name, u.u_fname, u.u_lname, u.age, u.salary, 

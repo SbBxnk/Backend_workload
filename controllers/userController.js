@@ -79,7 +79,7 @@ const GetAllExUser = (req, res) => {
         return res.status(200).send({ 
           status: true, 
           data: [],
-          message: "ไม่พบผู้ตรวจประเมินที่สามารถเลือกได้"
+          message: "ไม่พบผู้ประเมินที่สามารถเลือกได้"
         })
       }
   

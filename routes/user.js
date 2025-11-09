@@ -6,7 +6,7 @@ const  auth  = require('../middleware/auth');
 router.get('/user', auth, GetAllUser);
 // Export users to Excel (ต้องอยู่ก่อน /user/:u_id)
 router.get('/user/export', auth, exportUsersToExcel);
-// ดึงรายชื่อที่มีตำแหน่งบริหาร (สำหรับแต่งตั้งผู้ตรวจประเมิน)
+// ดึงรายชื่อที่มีตำแหน่งบริหาร (สำหรับแต่งตั้งผู้ประเมิน)
 router.get('/ex_user',auth, GetAllExUser);
 // ดึงรายชื่อที่ไม่มีตำแหน่งบริหาร (สำหรับแต่งตั้งผู้ประเมิน)
 router.get('/as_user/:round_list_id',auth, GetAllAsUser);

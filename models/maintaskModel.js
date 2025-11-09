@@ -25,11 +25,9 @@ const Maintask = {
     updateMainTask: (task_id, MainTaskDetail, callback) => {
         const { task_name } = MainTaskDetail;
         const sql = `UPDATE tb_task 
-                     SET task_name,
-                      = ?
+                     SET task_name = ?
                      WHERE task_id = ?`;
-        db.query(sql, [task_name,
-            , task_id], callback)
+        db.query(sql, [task_name, task_id], callback);
     },
     //ดึงหรือแสดงไฟล์มาอ่านก่อน
     getFilesByIds: (fileIds, callback) => {

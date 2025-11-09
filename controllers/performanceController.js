@@ -307,24 +307,25 @@ const getPerformanceEvaluationForm = (req, res) => {
 const addExpectedLevel = (req, res) => {
   const { competency_id, position_id, expected_level } = req.body;
   
-  if (!competency_id || !position_id || !expected_level) {
+  if (competency_id == null || position_id == null || expected_level == null) {
     return res.status(400).json({
       success: false,
       message: 'Missing required fields: competency_id, position_id, expected_level'
     });
   }
   
-  if (expected_level < 1 || expected_level > 5) {
+  const numericExpectedLevel = Number(expected_level);
+  if (Number.isNaN(numericExpectedLevel) || numericExpectedLevel < 0) {
     return res.status(400).json({
       success: false,
-      message: 'expected_level must be between 1 and 5'
+      message: 'expected_level ต้องเป็นตัวเลขและต้องไม่ติดลบ'
     });
   }
   
   const expectedLevelData = {
     competency_id,
     position_id,
-    expected_level
+    expected_level: numericExpectedLevel
   };
   
   Performance.addExpectedLevel(expectedLevelData, (error, result) => {
@@ -444,16 +445,19 @@ const getOnePerformanceTerm = (req, res) => {
 
 // เพิ่มข้อมูล performance term
 const addPerformanceTerm = (req, res) => {
-  const PerformanceTermDetail = req.body;
-  
-  if (!PerformanceTermDetail.competency_id || !PerformanceTermDetail.position_id || !PerformanceTermDetail.expected_level) {
+  const PerformanceTermDetail = { ...req.body };
+
+  if (PerformanceTermDetail.competency_id == null || PerformanceTermDetail.position_id == null || PerformanceTermDetail.expected_level == null) {
     return res.status(400).send({ status: false, error: 'กรุณาระบุ competency_id, position_id และ expected_level' });
   }
-  
-  if (PerformanceTermDetail.expected_level < 1 || PerformanceTermDetail.expected_level > 5) {
-    return res.status(400).send({ status: false, error: 'expected_level ต้องอยู่ระหว่าง 1-5' });
+
+  const numericExpectedLevel = Number(PerformanceTermDetail.expected_level);
+  if (Number.isNaN(numericExpectedLevel) || numericExpectedLevel < 0) {
+    return res.status(400).send({ status: false, error: 'expected_level ต้องเป็นตัวเลขและต้องไม่ติดลบ' });
   }
-  
+
+  PerformanceTermDetail.expected_level = numericExpectedLevel;
+
   Performance.addPerformanceTerm(PerformanceTermDetail, (error, result) => {
     if (error) {
       return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
@@ -475,15 +479,18 @@ const updatePerformanceTerm = (req, res) => {
     position_id: req.body.position_id,
     expected_level: req.body.expected_level,
   };
-  
-  if (!PerformanceTermDetail.expected_level) {
+
+  if (PerformanceTermDetail.expected_level == null) {
     return res.status(400).send({ status: false, error: 'กรุณาระบุ expected_level' });
   }
-  
-  if (PerformanceTermDetail.expected_level < 1 || PerformanceTermDetail.expected_level > 5) {
-    return res.status(400).send({ status: false, error: 'expected_level ต้องอยู่ระหว่าง 1-5' });
+
+  const numericExpectedLevel = Number(PerformanceTermDetail.expected_level);
+  if (Number.isNaN(numericExpectedLevel) || numericExpectedLevel < 0) {
+    return res.status(400).send({ status: false, error: 'expected_level ต้องเป็นตัวเลขและต้องไม่ติดลบ' });
   }
-  
+
+  PerformanceTermDetail.expected_level = numericExpectedLevel;
+
   Performance.getOnePerformanceTerm(id, (error, result) => {
     if (error) {
       return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });

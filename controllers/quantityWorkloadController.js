@@ -89,7 +89,19 @@ const getOneQuantityWorkload = (req, res) => {
 };
 
 const addQuantityWorkload = (req, res) => {
-    const QuantityWorkloadDetail = req.body;
+    const QuantityWorkloadDetail = { ...req.body };
+
+    if (QuantityWorkloadDetail.task_id == null || QuantityWorkloadDetail.workload_group_id == null || QuantityWorkloadDetail.quantity_workload_hours == null) {
+        return res.status(400).send({ status: false, error: 'กรุณาระบุ task_id, workload_group_id และ quantity_workload_hours' });
+    }
+
+    const numericHours = Number(QuantityWorkloadDetail.quantity_workload_hours);
+    if (Number.isNaN(numericHours) || numericHours < 0) {
+        return res.status(400).send({ status: false, error: 'quantity_workload_hours ต้องเป็นตัวเลขและต้องไม่ติดลบ' });
+    }
+
+    QuantityWorkloadDetail.quantity_workload_hours = numericHours;
+
     QuantityWorkload.addQuantityWorkload(QuantityWorkloadDetail, (error, result) => {
         if (error) {
             return res.status(500).send({ status: false, error: "การเชื่อมต่อข้อมูลผิดพลาด" });
@@ -135,6 +147,17 @@ const updateQuantityWorkload = (req, res) => {
         workload_group_id: req.body.workload_group_id,
         task_id: req.body.task_id
     };
+
+    if (QuantityWorkloadDetail.task_id == null || QuantityWorkloadDetail.workload_group_id == null || QuantityWorkloadDetail.quantity_workload_hours == null) {
+        return res.status(400).send({ status: false, error: 'กรุณาระบุ task_id, workload_group_id และ quantity_workload_hours' });
+    }
+
+    const numericHours = Number(QuantityWorkloadDetail.quantity_workload_hours);
+    if (Number.isNaN(numericHours) || numericHours < 0) {
+        return res.status(400).send({ status: false, error: 'quantity_workload_hours ต้องเป็นตัวเลขและต้องไม่ติดลบ' });
+    }
+
+    QuantityWorkloadDetail.quantity_workload_hours = numericHours;
 
     QuantityWorkload.getOneQuantityWorkload(id, (error, result) => {
         if (error) {

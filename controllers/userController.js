@@ -492,7 +492,7 @@ const login = (req, res) => {
                         work_start: user[0].work_start
                     },
                     secret_token,
-                    { expiresIn: '2h' }
+                    { expiresIn: '23h' }
                 );
                 return res.json({
                     status: "ok",

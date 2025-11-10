@@ -1,4 +1,5 @@
 const WorkloadForm = require("../models/formModel")
+const WorkloadEvaluation = require("../models/workloadEvaluationModel")
 const path = require("path")
 const fs = require("fs")
 
@@ -1747,29 +1748,53 @@ const submitFormWithSnapshot = (req, res) => {
     createPerformanceSnapshot() // สร้าง snapshot performance evaluation
   ])
     .then(([snapshotId, snapshotPerfId]) => {
-      // อัปเดต status ใน tb_workload_formlist
-      WorkloadForm.updateWorkloadFormStatus(formlist_id, 1, (statusError, statusResult) => {
-        if (statusError) {
-          console.error('Error updating form status:', statusError);
-        return res.status(500).json(createResponse(
-          false,
-          "ไม่สามารถอัปเดตสถานะฟอร์มได้",
-          [],
-          "DATABASE_ERROR"
-        ));
-        }
-
-        return res.status(200).json(createResponse(
-          true,
-          "ส่งฟอร์มและสร้าง snapshot สำเร็จ",
-          {
-            snapshot_id: snapshotId,
-            snapshot_performance_id: snapshotPerfId,
-            formlist_id: formlist_id,
-            status: 1
+      return new Promise((resolve, reject) => {
+        WorkloadForm.updateFormlistStatusById(
+          formlist_id,
+          1,
+          { touchSubmittedByAssessee: true },
+          (statusError, statusResult) => {
+            if (statusError) {
+              return reject(statusError);
+            }
+            resolve({
+              snapshotId,
+              snapshotPerfId,
+              statusResult
+            });
           }
-        ));
+        );
       });
+    })
+    .then((payload) => {
+      return new Promise((resolve, reject) => {
+        WorkloadEvaluation.createDraftEvaluationsForFormlist(
+          formlist_id,
+          (evalError, evalResult) => {
+            if (evalError) {
+              return reject(evalError);
+            }
+
+            resolve({
+              ...payload,
+              evalResult
+            });
+          }
+        );
+      });
+    })
+    .then(({ snapshotId, snapshotPerfId, evalResult }) => {
+      return res.status(200).json(createResponse(
+        true,
+        "ส่งฟอร์มและสร้าง snapshot สำเร็จ",
+        {
+          snapshot_id: snapshotId,
+          snapshot_performance_id: snapshotPerfId,
+          formlist_id,
+          status: 1,
+          created_evaluations: evalResult ? evalResult.affectedRows : 0
+        }
+      ));
     })
     .catch((error) => {
       console.error('Error in submitFormWithSnapshot:', error);

@@ -56,6 +56,13 @@ const Assessor = {
                         INNER JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
                         WHERE sal.round_list_id = tb_set_roundlist.round_list_id 
                         AND sal.as_u_id = ${as_u_id}
+                        AND wfl.status = 2
+                    ) THEN 2
+                    WHEN EXISTS (
+                        SELECT 1 FROM tb_workload_formlist wfl
+                        INNER JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
+                        WHERE sal.round_list_id = tb_set_roundlist.round_list_id 
+                        AND sal.as_u_id = ${as_u_id}
                         AND wfl.status = 1
                     ) THEN 1
                     ELSE 0
@@ -65,6 +72,12 @@ const Assessor = {
             // ถ้าไม่มี as_u_id ให้เช็คแบบเดิม (เช็คทั้งรอบ)
             hasCompletedFormsCase = `
                 CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM tb_workload_formlist wfl
+                        LEFT JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
+                        WHERE sal.round_list_id = tb_set_roundlist.round_list_id 
+                        AND wfl.status = 2
+                    ) THEN 2
                     WHEN EXISTS (
                         SELECT 1 FROM tb_workload_formlist wfl
                         LEFT JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
@@ -188,6 +201,12 @@ const Assessor = {
                 date_save,
                 year,
                 CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM tb_workload_formlist wfl
+                        LEFT JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
+                        WHERE sal.round_list_id = tb_set_roundlist.round_list_id 
+                        AND wfl.status = 2
+                    ) THEN 2
                     WHEN EXISTS (
                         SELECT 1 FROM tb_workload_formlist wfl
                         LEFT JOIN tb_set_assessorlist sal ON wfl.set_asses_list_id = sal.set_asses_list_id
@@ -655,7 +674,7 @@ const Assessor = {
                     LEFT JOIN tb_prefix AS assessor_prefix ON assessor.prefix_id = assessor_prefix.prefix_id
                     LEFT JOIN tb_prefix AS examinee_prefix ON examinee.prefix_id = examinee_prefix.prefix_id
                     LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
-                    LEFT JOIN tb_position AS assessor_position ON assessor.position_id = assessor_position.position_id
+                    LEFT JOIN tb_position AS assessor_position ON assessor.ฃposition_id = assessor_position.position_id
                     LEFT JOIN tb_position AS examinee_position ON examinee.position_id = examinee_position.position_id
                     WHERE tb_set_roundlist.round_list_id = ? AND tb_set_assessorinfo.ex_u_id = ?;
                     `
@@ -673,6 +692,7 @@ const Assessor = {
                 tb_users.u_lname,
                 tb_users.u_img,
                 tb_users.u_id_card,
+                tb_position.position_name,
                 tb_ex_position.ex_position_name,
                 tb_set_assessorlist.workload_group_id,
                 tb_workload_group.workload_group_name,
@@ -681,47 +701,11 @@ const Assessor = {
                 tb_set_assessorlist
             LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
             LEFT JOIN tb_prefix ON tb_prefix.prefix_id = tb_users.prefix_id
+            LEFT JOIN tb_position ON tb_users.position_id = tb_position.position_id
             LEFT JOIN tb_ex_position ON tb_ex_position.ex_position_id = tb_users.ex_position_id
             LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
             WHERE tb_set_assessorlist.set_asses_list_id = ?`;
         db.query(sql, [set_asses_list_id], callback);
-    },
-
-    // ดึงรายการการประเมินสำหรับผู้ประเมิน (ex_u_id)
-    getAssessorEvaluations: (ex_u_id, callback) => {
-        const sql = `
-            SELECT 
-                tb_set_assessorinfo.set_asses_info_id,
-                tb_set_assessorinfo.set_asses_list_id,
-                tb_set_assessorinfo.ex_u_id,
-                tb_set_assessorlist.as_u_id,
-                tb_set_assessorlist.round_list_id,
-                tb_set_roundlist.round_list_name,
-                tb_set_roundlist.round,
-                tb_set_roundlist.year,
-                tb_set_roundlist.date_start,
-                tb_set_roundlist.date_end,
-                tb_prefix.prefix_name,
-                tb_users.u_fname,
-                tb_users.u_lname,
-                tb_users.u_img,
-                tb_users.u_id_card,
-                tb_ex_position.ex_position_name,
-                tb_workload_group.workload_group_name,
-                tb_set_assessorinfo.date_save
-            FROM 
-                tb_set_assessorinfo
-            LEFT JOIN tb_set_assessorlist ON tb_set_assessorinfo.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
-            LEFT JOIN tb_set_roundlist ON tb_set_assessorlist.round_list_id = tb_set_roundlist.round_list_id
-            LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
-            LEFT JOIN tb_prefix ON tb_prefix.prefix_id = tb_users.prefix_id
-            LEFT JOIN tb_ex_position ON tb_ex_position.ex_position_id = tb_users.ex_position_id
-            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
-            WHERE tb_set_assessorinfo.ex_u_id = ?
-            AND tb_set_roundlist.date_start <= CURDATE()
-            AND tb_set_roundlist.date_end >= CURDATE()
-            ORDER BY tb_set_roundlist.year DESC, tb_set_roundlist.round DESC`;
-        db.query(sql, [ex_u_id], callback);
     },
 
     // ดึงรอบการประเมินสำหรับผู้ประเมิน (ex_u_id)
@@ -748,8 +732,56 @@ const Assessor = {
     },
 
     // ดึงรายการผู้ใช้ที่ต้องตรวจในรอบการประเมินเฉพาะ
-    getAssesseesByRound: (ex_u_id, round_list_id, callback) => {
-        const sql = `
+    getAssesseesByRound: (params, callback) => {
+        const {
+            ex_u_id,
+            round_list_id,
+            page = 1,
+            limit = 10,
+            sort = 'date_save',
+            order = 'desc',
+        } = params || {}
+
+        const numericPage = Number(page) > 0 ? Number(page) : 1
+        const numericLimit = Number(limit) > 0 ? Number(limit) : 10
+        const offset = (numericPage - 1) * numericLimit
+
+        const sortFieldMap = {
+            date_save: 'tb_set_assessorinfo.date_save',
+            round_list_name: 'tb_set_roundlist.round_list_name',
+            round: 'tb_set_roundlist.round',
+            year: 'tb_set_roundlist.year',
+            u_fname: 'tb_users.u_fname',
+            u_lname: 'tb_users.u_lname',
+            position_name: 'tb_position.position_name',
+            ex_position_name: 'tb_ex_position.ex_position_name',
+            workload_group_name: 'tb_workload_group.workload_group_name',
+        }
+
+        const sortKey = typeof sort === 'string' && sortFieldMap[sort] ? sort : 'date_save'
+        const sortField = sortFieldMap[sortKey]
+        const sortOrder = typeof order === 'string' && order.toLowerCase() === 'asc' ? 'ASC' : 'DESC'
+
+        const baseJoins = `
+            FROM 
+                tb_set_assessorinfo
+            LEFT JOIN tb_set_assessorlist ON tb_set_assessorinfo.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
+            LEFT JOIN tb_set_roundlist ON tb_set_assessorlist.round_list_id = tb_set_roundlist.round_list_id
+            LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
+            LEFT JOIN tb_prefix ON tb_prefix.prefix_id = tb_users.prefix_id
+            LEFT JOIN tb_position ON tb_users.position_id = tb_position.position_id
+            LEFT JOIN tb_ex_position ON tb_ex_position.ex_position_id = tb_users.ex_position_id
+            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
+            WHERE tb_set_assessorinfo.ex_u_id = ?
+            AND tb_set_assessorlist.round_list_id = ?
+        `
+
+        const countSql = `
+            SELECT COUNT(*) AS total_rows
+            ${baseJoins}
+        `
+
+        const dataSql = `
             SELECT 
                 tb_set_assessorinfo.set_asses_info_id,
                 tb_set_assessorinfo.set_asses_list_id,
@@ -766,21 +798,40 @@ const Assessor = {
                 tb_users.u_lname,
                 tb_users.u_img,
                 tb_users.u_id_card,
+                tb_position.position_name AS position_name,
                 tb_ex_position.ex_position_name,
                 tb_workload_group.workload_group_name,
                 tb_set_assessorinfo.date_save
-            FROM 
-                tb_set_assessorinfo
-            LEFT JOIN tb_set_assessorlist ON tb_set_assessorinfo.set_asses_list_id = tb_set_assessorlist.set_asses_list_id
-            LEFT JOIN tb_set_roundlist ON tb_set_assessorlist.round_list_id = tb_set_roundlist.round_list_id
-            LEFT JOIN tb_users ON tb_set_assessorlist.as_u_id = tb_users.u_id
-            LEFT JOIN tb_prefix ON tb_prefix.prefix_id = tb_users.prefix_id
-            LEFT JOIN tb_ex_position ON tb_ex_position.ex_position_id = tb_users.ex_position_id
-            LEFT JOIN tb_workload_group ON tb_set_assessorlist.workload_group_id = tb_workload_group.workload_group_id
-            WHERE tb_set_assessorinfo.ex_u_id = ?
-            AND tb_set_assessorlist.round_list_id = ?
-            ORDER BY tb_users.u_fname, tb_users.u_lname`;
-        db.query(sql, [ex_u_id, round_list_id], callback);
+            ${baseJoins}
+            ORDER BY ${sortField} ${sortOrder}, tb_set_assessorinfo.set_asses_info_id ASC
+            LIMIT ? OFFSET ?
+        `
+
+        db.query(countSql, [ex_u_id, round_list_id], (countError, countResult) => {
+            if (countError) {
+                return callback(countError, null)
+            }
+
+            const totalRows = countResult?.[0]?.total_rows || 0
+            const totalPages = numericLimit > 0 ? Math.max(1, Math.ceil(totalRows / numericLimit)) : 1
+
+            db.query(dataSql, [ex_u_id, round_list_id, numericLimit, offset], (dataError, dataResult) => {
+                if (dataError) {
+                    return callback(dataError, null)
+                }
+
+                return callback(null, {
+                    data: dataResult || [],
+                    meta: {
+                        limit: numericLimit,
+                        page: numericPage,
+                        sort: sortKey,
+                        total_rows: totalRows,
+                        total_pages: totalPages,
+                    },
+                })
+            })
+        })
     },
 
     // อัปเดต status ใน tb_workload_formlist ผ่าน tb_set_assessorlist

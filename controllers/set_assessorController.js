@@ -1100,59 +1100,6 @@ const getAssignedExaminees = (req, res) => {
     })
 }
 
-// ดึงรายการการประเมินสำหรับผู้ประเมิน
-const getAssessorEvaluations = (req, res) => {
-    const ex_u_id = req.params.ex_u_id;
-    
-    // Generate transaction code
-    const generateTransactionCode = () => {
-        return 'TXN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    };
-    
-    Assessor.getAssessorEvaluations(ex_u_id, (error, result) => {
-        if (error) {
-            console.error("Database Error:", error);
-            return res.status(500).json({
-                code: 500,
-                timestamp: new Date().toISOString(),
-                transactionCode: generateTransactionCode(),
-                success: false,
-                titleMessage: "error",
-                message: "การเชื่อมต่อข้อมูลผิดพลาด",
-                errorCode: "DATABASE_ERROR",
-                meta: null,
-                payload: []
-            });
-        }
-
-        if (!result || result.length === 0) {
-            return res.status(200).json({
-                code: 200,
-                timestamp: new Date().toISOString(),
-                transactionCode: generateTransactionCode(),
-                success: true,
-                titleMessage: "success",
-                message: "ไม่พบรายการการประเมิน",
-                errorCode: "",
-                meta: null,
-                payload: []
-            });
-        }
-
-        res.status(200).json({
-            code: 200,
-            timestamp: new Date().toISOString(),
-            transactionCode: generateTransactionCode(),
-            success: true,
-            titleMessage: "success",
-            message: "success",
-            errorCode: "",
-            meta: null,
-            payload: result
-        });
-    });
-}
-
 // ดึงรอบการประเมินสำหรับผู้ประเมิน
 const getAssessorRounds = (req, res) => {
     const ex_u_id = req.params.ex_u_id;
@@ -1209,13 +1156,31 @@ const getAssessorRounds = (req, res) => {
 // ดึงรายการผู้ใช้ที่ต้องตรวจในรอบการประเมินเฉพาะ
 const getAssesseesByRound = (req, res) => {
     const { ex_u_id, round_list_id } = req.params;
-    
+    const {
+        page = 1,
+        limit = 10,
+        sort = 'date_save',
+        order = 'desc',
+    } = req.query || {};
+
+    const numericPage = Number(page) > 0 ? Number(page) : 1;
+    const numericLimit = Number(limit) > 0 ? Number(limit) : 10;
+    const sortValue = typeof sort === 'string' ? sort : 'date_save';
+    const orderValue = typeof order === 'string' ? order : 'desc';
+
     // Generate transaction code
     const generateTransactionCode = () => {
         return 'TXN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     };
-    
-    Assessor.getAssesseesByRound(ex_u_id, round_list_id, (error, result) => {
+
+    Assessor.getAssesseesByRound({
+        ex_u_id: Number(ex_u_id),
+        round_list_id: Number(round_list_id),
+        page: numericPage,
+        limit: numericLimit,
+        sort: sortValue,
+        order: orderValue,
+    }, (error, result) => {
         if (error) {
             console.error("Database Error:", error);
             return res.status(500).json({
@@ -1226,24 +1191,25 @@ const getAssesseesByRound = (req, res) => {
                 titleMessage: "error",
                 message: "การเชื่อมต่อข้อมูลผิดพลาด",
                 errorCode: "DATABASE_ERROR",
-                meta: null,
+                meta: {
+                    limit: numericLimit,
+                    page: numericPage,
+                    sort: 'date_save',
+                    total_rows: 0,
+                    total_pages: 0,
+                },
                 payload: []
             });
         }
 
-        if (!result || result.length === 0) {
-            return res.status(200).json({
-                code: 200,
-                timestamp: new Date().toISOString(),
-                transactionCode: generateTransactionCode(),
-                success: true,
-                titleMessage: "success",
-                message: "ไม่พบรายการผู้ใช้ในรอบนี้",
-                errorCode: "",
-                meta: null,
-                payload: []
-            });
-        }
+        const payload = result?.data || [];
+        const meta = result?.meta || {
+            limit: numericLimit,
+            page: numericPage,
+            sort: 'date_save',
+            total_rows: 0,
+            total_pages: 0,
+        };
 
         res.status(200).json({
             code: 200,
@@ -1251,10 +1217,10 @@ const getAssesseesByRound = (req, res) => {
             transactionCode: generateTransactionCode(),
             success: true,
             titleMessage: "success",
-            message: "success",
+            message: payload.length === 0 ? "ไม่พบรายการผู้ใช้ในรอบนี้" : "success",
             errorCode: "",
-            meta: null,
-            payload: result
+            meta,
+            payload
         });
     });
 }
@@ -1495,7 +1461,6 @@ module.exports = {
     getAssessorOfCurrentYear,
     checkIsAssessor,
     getAssignedExaminees,
-    getAssessorEvaluations,
     getAssessorRounds,
     getAssesseesByRound,
     updateAssessorStatus,

@@ -499,6 +499,46 @@ const WorkloadForm = {
     db.query(sql, [status, set_asses_list_id], callback);
   },
 
+  updateFormlistStatusById: (formlist_id, status, options = {}, callback) => {
+    if (!formlist_id) {
+      return callback(new Error("formlist_id is required"));
+    }
+
+    const updates = [];
+    const params = [];
+
+    if (typeof status === "number") {
+      updates.push("status = ?");
+      params.push(status);
+    }
+
+    if (options.touchSubmittedByAssessee) {
+      updates.push("submitted_by_assessee_at = CURRENT_TIMESTAMP");
+    } else if (options.submittedByAssesseeAt) {
+      updates.push("submitted_by_assessee_at = ?");
+      params.push(options.submittedByAssesseeAt);
+    }
+
+    if (options.touchFinalizedAt) {
+      updates.push("finalized_at = CURRENT_TIMESTAMP");
+    } else if (options.finalizedAt) {
+      updates.push("finalized_at = ?");
+      params.push(options.finalizedAt);
+    }
+
+    if (updates.length === 0) {
+      return callback(new Error("No fields to update"));
+    }
+
+    const sql = `
+      UPDATE tb_workload_formlist
+      SET ${updates.join(", ")}
+      WHERE formlist_id = ?
+    `;
+    params.push(formlist_id);
+    db.query(sql, params, callback);
+  },
+
   // อัปเดต status แบบ array ใน tb_workload_formlist
   updateWorkloadFormStatusBulk: (set_asses_list_ids, status, callback) => {
     if (!Array.isArray(set_asses_list_ids) || set_asses_list_ids.length === 0) {
@@ -514,18 +554,20 @@ const WorkloadForm = {
     const sql = `
       SELECT 
         sal.workload_group_id,
-        wfl.status as form_status,
-        CASE 
-          WHEN wfl.status = 1 THEN 'completed'
-          WHEN sal.workload_group_id IS NULL THEN 'not_started'
-          WHEN sal.workload_group_id IS NOT NULL AND wfl.status = 0 THEN 'in_progress'
+        wfl.status AS form_status,
+        CASE
           WHEN EXISTS (
-            SELECT 1 FROM tb_workload_form_info wfi 
-            WHERE wfi.formlist_id = wfl.formlist_id 
-            AND wfi.as_u_id = sal.as_u_id
-          ) THEN 'in_progress'
+            SELECT 1
+            FROM tb_set_assessorinfo sai
+            INNER JOIN tb_workload_form_evaluation eval
+              ON eval.set_asses_info_id = sai.set_asses_info_id
+            WHERE sai.set_asses_list_id = sal.set_asses_list_id
+              AND eval.status = 1
+          ) THEN 'completed'
+          WHEN wfl.status >= 1 THEN 'in_progress'
+          WHEN sal.workload_group_id IS NOT NULL THEN 'in_progress'
           ELSE 'not_started'
-        END as evaluation_status
+        END AS evaluation_status
       FROM tb_set_assessorlist sal
       LEFT JOIN tb_workload_formlist wfl ON sal.set_asses_list_id = wfl.set_asses_list_id
       WHERE sal.set_asses_list_id = ?
@@ -721,6 +763,7 @@ const WorkloadForm = {
   getAllFormInfoFromSnapshot: (formlist_id, as_u_id, callback) => {
     const sql = `
       SELECT 
+        sf.snapshot_form_id,
         sf.original_form_id as form_id,
         sf.subtask_id,
         st.task_id,

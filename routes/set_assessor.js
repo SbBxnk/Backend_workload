@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { getAllRoundlist,getOneRoundlist,checkround,addRoundlist,deleteRoundlist,updateRoundlist,getAllsetAssesorList,getOnesetAssesorList,addSetAssessorList,addSetAssessorListMultiple,deleteSetAssessorList,getOnesetAssesorInfo,getAssesseeBySetAssesListId,addSetAssessorInfo,addSetAssessorInfoMultiple,deleteSetAssessorInfo,getAssessorOfCurrentYear,checkIsAssessor,getAssignedExaminees,getAssessorEvaluations,getAssessorRounds,getAssesseesByRound,updateAssessorStatus,checkUserAccessToRound} = require('../controllers/set_assessorController')
+const { getAllRoundlist,getOneRoundlist,checkround,addRoundlist,deleteRoundlist,updateRoundlist,getAllsetAssesorList,getOnesetAssesorList,addSetAssessorList,addSetAssessorListMultiple,deleteSetAssessorList,getOnesetAssesorInfo,getAssesseeBySetAssesListId,addSetAssessorInfo,addSetAssessorInfoMultiple,deleteSetAssessorInfo,getAssessorOfCurrentYear,checkIsAssessor,getAssignedExaminees,getAssessorRounds,getAssesseesByRound,updateAssessorStatus,checkUserAccessToRound} = require('../controllers/set_assessorController')
 const  auth  = require('../middleware/auth');
 
 // รอบการประเมิน
@@ -35,9 +35,6 @@ router.get("/check_assessor/:u_id", auth, checkIsAssessor)
 
 // ดึงข้อมูลผู้ที่ต้องได้รับการประเมินโดยผู้ประเมินที่ระบุ
 router.get("/set_assessor/assigned_examinees/:round_list_id/:ex_u_id", auth, getAssignedExaminees)
-
-// ดึงรายการการประเมินสำหรับผู้ประเมิน
-router.get("/assessor_evaluations/:ex_u_id", auth, getAssessorEvaluations)
 
 // ดึงรอบการประเมินสำหรับผู้ประเมิน
 router.get("/assessor_rounds/:ex_u_id", auth, getAssessorRounds)

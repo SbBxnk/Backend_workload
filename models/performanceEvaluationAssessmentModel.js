@@ -229,6 +229,27 @@ const PerformanceEvaluationAssessment = {
       WHERE evaluation_assessment_id = ?;
     `;
     db.query(sql, [evaluation_assessment_id], callback);
+  },
+
+  /**
+   * ดึง assessed_level เฉลี่ยจากผู้ตรวจทุกคนสำหรับแต่ละ competency_id
+   * สำหรับ formlist ที่ status = 2 (finalized)
+   */
+  getAverageAssessedLevelsByFormlist: (formlist_id, callback) => {
+    const sql = `
+      SELECT 
+        item.competency_id,
+        AVG(item.assessed_level) AS average_assessed_level,
+        COUNT(DISTINCT eval.evaluation_assessment_id) AS evaluator_count
+      FROM tb_performance_evaluation_assessment eval
+      INNER JOIN tb_performance_evaluation_assessment_item item
+        ON item.evaluation_assessment_id = eval.evaluation_assessment_id
+      WHERE eval.formlist_id = ?
+        AND eval.status = 1
+        AND item.assessed_level IS NOT NULL
+      GROUP BY item.competency_id;
+    `;
+    db.query(sql, [formlist_id], callback);
   }
 };
 

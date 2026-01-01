@@ -71,7 +71,6 @@ if (fs.existsSync(frontendFilesDir)) {
   console.log('Frontend files directory exists:', frontendFilesDir);
 }
 
-// Also serve profile images directory if configured (useful in Docker)
 const profileDir = process.env.PROFILE_UPLOAD_DIR;
 if (profileDir && fs.existsSync(profileDir)) {
   app.use('/profile', express.static(profileDir));

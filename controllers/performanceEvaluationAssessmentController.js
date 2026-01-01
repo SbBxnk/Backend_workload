@@ -542,9 +542,37 @@ const submitEvaluationAssessment = (req, res) => {
   });
 };
 
+const getAverageAssessedLevels = (req, res) => {
+  const { formlist_id } = req.params;
+
+  if (!formlist_id) {
+    return res.status(400).json(createResponse(
+      false,
+      'กรุณาระบุ formlist_id',
+      [],
+      'MISSING_PARAMETERS'
+    ));
+  }
+
+  PerformanceEvaluationAssessment.getAverageAssessedLevelsByFormlist(formlist_id, (error, rows) => {
+    if (error) {
+      console.error('Error fetching average assessed levels:', error);
+      return res.status(500).json(createResponse(
+        false,
+        `ไม่สามารถดึงข้อมูลเฉลี่ยระดับสมรรถนะได้: ${error.message || 'Unknown error'}`,
+        [],
+        'DATABASE_ERROR'
+      ));
+    }
+
+    res.json(createResponse(true, 'ดึงข้อมูลเฉลี่ยระดับสมรรถนะสำเร็จ', rows || []));
+  });
+};
+
 module.exports = {
   getEvaluationAssessment,
   saveDraft,
-  submitEvaluationAssessment
+  submitEvaluationAssessment,
+  getAverageAssessedLevels
 };
 

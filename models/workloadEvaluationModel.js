@@ -243,6 +243,27 @@ const WorkloadEvaluation = {
       WHERE evaluation_id = ?;
     `;
     db.query(sql, [evaluation_id], callback);
+  },
+
+  /**
+   * ดึง evaluation scores เฉลี่ยจากผู้ตรวจทุกคนสำหรับแต่ละ snapshot_form_id
+   * สำหรับ formlist ที่ status = 2 (finalized)
+   */
+  getAverageEvaluationScoresByFormlist: (formlist_id, callback) => {
+    const sql = `
+      SELECT 
+        item.snapshot_form_id,
+        AVG(item.score) AS average_score,
+        COUNT(DISTINCT eval.evaluation_id) AS evaluator_count
+      FROM tb_workload_form_evaluation eval
+      INNER JOIN tb_workload_form_evaluation_item item
+        ON item.evaluation_id = eval.evaluation_id
+      WHERE eval.formlist_id = ?
+        AND eval.status = 1
+        AND item.score IS NOT NULL
+      GROUP BY item.snapshot_form_id;
+    `;
+    db.query(sql, [formlist_id], callback);
   }
 };
 

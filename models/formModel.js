@@ -539,7 +539,6 @@ const WorkloadForm = {
     db.query(sql, params, callback);
   },
 
-  // อัปเดต status แบบ array ใน tb_workload_formlist
   updateWorkloadFormStatusBulk: (set_asses_list_ids, status, callback) => {
     if (!Array.isArray(set_asses_list_ids) || set_asses_list_ids.length === 0) {
       return callback(null, { affectedRows: 0 });
@@ -549,8 +548,64 @@ const WorkloadForm = {
     db.query(sql, [status, set_asses_list_ids], callback);
   },
 
-  // ตรวจสอบสถานะการประเมินของ assessor
-  getAssessorEvaluationStatus: (set_asses_list_id, callback) => {
+  getAssessorEvaluationStatus: (set_asses_info_id, callback) => {
+    const sql = `
+      SELECT 
+        sal.workload_group_id,
+        wfl.status AS form_status,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM tb_workload_form_evaluation eval
+            WHERE eval.set_asses_info_id = ?
+              AND eval.status = 1
+          ) AND EXISTS (
+            SELECT 1
+            FROM tb_performance_evaluation_assessment perf_eval
+            WHERE perf_eval.set_asses_info_id = ?
+              AND perf_eval.status = 1
+          ) THEN 'completed'
+          WHEN EXISTS (
+            SELECT 1
+            FROM tb_workload_form_evaluation eval
+            WHERE eval.set_asses_info_id = ?
+              AND eval.status = 1
+          ) OR EXISTS (
+            SELECT 1
+            FROM tb_performance_evaluation_assessment perf_eval
+            WHERE perf_eval.set_asses_info_id = ?
+              AND perf_eval.status = 1
+          ) OR EXISTS (
+            SELECT 1
+            FROM tb_workload_form_evaluation eval
+            WHERE eval.set_asses_info_id = ?
+              AND eval.status = 0
+          ) OR EXISTS (
+            SELECT 1
+            FROM tb_performance_evaluation_assessment perf_eval
+            WHERE perf_eval.set_asses_info_id = ?
+              AND perf_eval.status = 0
+          ) OR wfl.status >= 1 THEN 'in_progress'
+          WHEN sal.workload_group_id IS NOT NULL THEN 'in_progress'
+          ELSE 'not_started'
+        END AS evaluation_status
+      FROM tb_set_assessorinfo sai
+      INNER JOIN tb_set_assessorlist sal ON sai.set_asses_list_id = sal.set_asses_list_id
+      LEFT JOIN tb_workload_formlist wfl ON sal.set_asses_list_id = wfl.set_asses_list_id
+      WHERE sai.set_asses_info_id = ?
+    `;
+    db.query(sql, [
+      set_asses_info_id,  // workload evaluation status = 1
+      set_asses_info_id,  // performance evaluation assessment status = 1
+      set_asses_info_id,  // workload evaluation status = 1 (OR condition)
+      set_asses_info_id,  // performance evaluation assessment status = 1 (OR condition)
+      set_asses_info_id,  // workload evaluation status = 0 (OR condition)
+      set_asses_info_id,  // performance evaluation assessment status = 0 (OR condition)
+      set_asses_info_id   // WHERE clause
+    ], callback);
+  },
+
+  getAssessorFormStatus: (set_asses_list_id, callback) => {
     const sql = `
       SELECT 
         sal.workload_group_id,
@@ -575,7 +630,6 @@ const WorkloadForm = {
     db.query(sql, [set_asses_list_id], callback);
   },
 
-  // ดึง set_asses_list_id จาก user_id และ round_list_id
   getSetAssessorListIdByUserAndRound: (user_id, round_list_id, callback) => {
     const sql = `
       SELECT set_asses_list_id 

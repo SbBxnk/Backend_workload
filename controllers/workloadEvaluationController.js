@@ -76,49 +76,88 @@ const getEvaluation = (req, res) => {
       ));
     }
 
+    // ถ้ายังไม่พบ evaluation record ให้สร้าง draft evaluation อัตโนมัติ
     if (!rows || rows.length === 0) {
-      return res.status(404).json(createResponse(
+      // สร้าง draft evaluation สำหรับ formlist นี้ (จะสร้างสำหรับทุก assessor)
+      WorkloadEvaluation.createDraftEvaluationsForFormlist(formlist_id, (createError, createResult) => {
+        if (createError) {
+          console.error('Error creating draft evaluations:', createError);
+          return res.status(500).json(createResponse(
+            false,
+            'ไม่สามารถสร้างข้อมูลการประเมินได้',
+            [],
+            'DATABASE_ERROR'
+          ));
+        }
+
+        // หลังจากสร้างแล้ว ให้ดึงข้อมูลอีกครั้ง
+        WorkloadEvaluation.getEvaluationBySetAssesInfo(formlist_id, set_asses_info_id, (retryError, retryRows) => {
+          if (retryError) {
+            console.error('Error fetching evaluation after creation:', retryError);
+            return res.status(500).json(createResponse(
+              false,
+              'ไม่สามารถดึงข้อมูลการประเมินได้',
+              [],
+              'DATABASE_ERROR'
+            ));
+          }
+
+          if (!retryRows || retryRows.length === 0) {
+            return res.status(404).json(createResponse(
+              false,
+              'ไม่พบข้อมูลการประเมินสำหรับผู้ประเมินนี้',
+              [],
+              'EVALUATION_NOT_FOUND'
+            ));
+          }
+
+          // ดำเนินการต่อเหมือนเดิม
+          processEvaluationData(retryRows, formlist_id, res);
+        });
+      });
+      return;
+    }
+
+    // ดำเนินการดึงข้อมูล snapshot และส่ง response
+    processEvaluationData(rows, formlist_id, res);
+  });
+};
+
+// แยก function สำหรับประมวลผลข้อมูล evaluation
+const processEvaluationData = (rows, formlist_id, res) => {
+  const evaluation = mapEvaluationRows(rows);
+  const assesseeUserId = evaluation.assessee_user_id;
+
+  WorkloadForm.getAllFormInfoFromSnapshot(formlist_id, assesseeUserId, (snapshotError, snapshotResult) => {
+    if (snapshotError) {
+      console.error('Error fetching snapshot data:', snapshotError);
+      return res.status(500).json(createResponse(
         false,
-        'ไม่พบข้อมูลการประเมินสำหรับผู้ประเมินนี้',
+        'ไม่สามารถดึงข้อมูล snapshot ได้',
         [],
-        'EVALUATION_NOT_FOUND'
+        'DATABASE_ERROR'
       ));
     }
 
-    const evaluation = mapEvaluationRows(rows);
-    const assesseeUserId = evaluation.assessee_user_id;
+    const processedSnapshot = (snapshotResult || []).map((row) => ({
+      ...row,
+      files: typeof row.files === 'string' ? row.files.split(', ').map((name) => ({ file_name: name })) : row.files,
+      links: typeof row.links === 'string'
+        ? row.links.split(', ').map((item) => {
+          const [link_name = '', link_path = ''] = item.split('|');
+          return { link_name, link_path };
+        })
+        : row.links
+    }));
 
-    WorkloadForm.getAllFormInfoFromSnapshot(formlist_id, assesseeUserId, (snapshotError, snapshotResult) => {
-      if (snapshotError) {
-        console.error('Error fetching snapshot data:', snapshotError);
-        return res.status(500).json(createResponse(
-          false,
-          'ไม่สามารถดึงข้อมูล snapshot ได้',
-          [],
-          'DATABASE_ERROR'
-        ));
+    return res.status(200).json(createResponse(
+      true,
+      'ดึงข้อมูลการประเมินสำเร็จ',
+      {
+        evaluation,
+        snapshot: processedSnapshot
       }
-
-      const processedSnapshot = (snapshotResult || []).map((row) => ({
-        ...row,
-        files: typeof row.files === 'string' ? row.files.split(', ').map((name) => ({ file_name: name })) : row.files,
-        links: typeof row.links === 'string'
-          ? row.links.split(', ').map((item) => {
-            const [link_name = '', link_path = ''] = item.split('|');
-            return { link_name, link_path };
-          })
-          : row.links
-      }));
-
-      return res.status(200).json(createResponse(
-        true,
-        'ดึงข้อมูลการประเมินสำเร็จ',
-        {
-          evaluation,
-          snapshot: processedSnapshot
-        }
-      ));
-    });
+    ));
   });
 };
 
@@ -308,46 +347,104 @@ const submitEvaluation = (req, res) => {
 
             const totalAssignments = assignRows[0]?.total_assignments || 0;
 
-            const finalizeIfNeeded = (callback) => {
-              if (totalAssignments > 0 && submittedCount >= totalAssignments) {
-                WorkloadForm.updateFormlistStatusById(
-                  evaluation.formlist_id,
-                  2,
-                  { touchFinalizedAt: true },
-                  (updateError) => {
-                    if (updateError) {
-                      console.error('Error updating formlist status to finalized:', updateError);
-                      return callback(updateError);
-                    }
-                    callback(null, true);
+            // ตรวจสอบ performance evaluation assessment (องค์ประกอบที่ 2) ด้วย
+            const PerformanceEvaluationAssessment = require('../models/performanceEvaluationAssessmentModel');
+            PerformanceEvaluationAssessment.countSubmittedEvaluationAssessments(evaluation.formlist_id, (perfCountError, perfCountRows) => {
+              if (perfCountError) {
+                console.error('Error counting submitted performance assessments:', perfCountError);
+                // ไม่ return error เพราะ submit สำเร็จแล้ว แค่ finalize ไม่ได้
+                const finalizeIfNeeded = (callback) => {
+                  // ถ้าไม่สามารถตรวจสอบ performance assessment ได้ ให้ finalize เฉพาะ workload evaluation
+                  if (totalAssignments > 0 && submittedCount >= totalAssignments) {
+                    WorkloadForm.updateFormlistStatusById(
+                      evaluation.formlist_id,
+                      2,
+                      { touchFinalizedAt: true },
+                      (updateError) => {
+                        if (updateError) {
+                          console.error('Error updating formlist status to finalized:', updateError);
+                          return callback(updateError);
+                        }
+                        callback(null, true);
+                      }
+                    );
+                  } else {
+                    callback(null, false);
                   }
-                );
-              } else {
-                callback(null, false);
-              }
-            };
+                };
 
-            finalizeIfNeeded((finalizeError, finalized) => {
-              if (finalizeError) {
-                return res.status(500).json(createResponse(
-                  false,
-                  'ไม่สามารถอัปเดตสถานะฟอร์มได้',
-                  [],
-                  'DATABASE_ERROR'
-                ));
+                finalizeIfNeeded((finalizeError, finalized) => {
+                  if (finalizeError) {
+                    return res.status(500).json(createResponse(
+                      false,
+                      'ไม่สามารถอัปเดตสถานะฟอร์มได้',
+                      [],
+                      'DATABASE_ERROR'
+                    ));
+                  }
+
+                  return res.status(200).json(createResponse(
+                    true,
+                    'ส่งการประเมินสำเร็จ',
+                    {
+                      evaluation_id: Number(evaluation_id),
+                      submitted: true,
+                      submitted_count: submittedCount,
+                      total_assignments: totalAssignments,
+                      form_finalized: finalized
+                    }
+                  ));
+                });
+                return;
               }
 
-              return res.status(200).json(createResponse(
-                true,
-                'ส่งการประเมินสำเร็จ',
-                {
-                  evaluation_id: Number(evaluation_id),
-                  submitted: true,
-                  submitted_count: submittedCount,
-                  total_assignments: totalAssignments,
-                  form_finalized: finalized
+              const perfSubmittedCount = perfCountRows[0]?.submitted_count || 0;
+
+              const finalizeIfNeeded = (callback) => {
+                // Finalize ถ้าทั้งสององค์ประกอบส่งครบทุกคนแล้ว
+                if (totalAssignments > 0 && 
+                    submittedCount >= totalAssignments && 
+                    perfSubmittedCount >= totalAssignments) {
+                  WorkloadForm.updateFormlistStatusById(
+                    evaluation.formlist_id,
+                    2,
+                    { touchFinalizedAt: true },
+                    (updateError) => {
+                      if (updateError) {
+                        console.error('Error updating formlist status to finalized:', updateError);
+                        return callback(updateError);
+                      }
+                      callback(null, true);
+                    }
+                  );
+                } else {
+                  callback(null, false);
                 }
-              ));
+              };
+
+              finalizeIfNeeded((finalizeError, finalized) => {
+                if (finalizeError) {
+                  return res.status(500).json(createResponse(
+                    false,
+                    'ไม่สามารถอัปเดตสถานะฟอร์มได้',
+                    [],
+                    'DATABASE_ERROR'
+                  ));
+                }
+
+                return res.status(200).json(createResponse(
+                  true,
+                  'ส่งการประเมินสำเร็จ',
+                  {
+                    evaluation_id: Number(evaluation_id),
+                    submitted: true,
+                    submitted_count: submittedCount,
+                    perf_submitted_count: perfSubmittedCount,
+                    total_assignments: totalAssignments,
+                    form_finalized: finalized
+                  }
+                ));
+              });
             });
           });
         });

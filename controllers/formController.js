@@ -1414,18 +1414,18 @@ const updateWorkloadFormStatusBulk = (req, res) => {
   });
 };
 
-// ดึงสถานะการประเมินของ assessor
+// ดึงสถานะการประเมินของ assessor (ตาม set_asses_info_id เพื่อตรวจสอบเฉพาะ assessor คนนั้น)
 const getAssessorEvaluationStatus = (req, res) => {
-  const { set_asses_list_id } = req.params;
+  const { set_asses_info_id } = req.params;
 
-  if (!set_asses_list_id) {
+  if (!set_asses_info_id) {
     return res.status(400).json({
       code: 400,
       timestamp: new Date().toISOString(),
       transactionCode: `TXN_${Date.now()}`,
       success: false,
       titleMessage: "เกิดข้อผิดพลาด",
-      message: "กรุณาระบุ set_asses_list_id",
+      message: "กรุณาระบุ set_asses_info_id",
       errorCode: "MISSING_PARAMETERS",
       payload: [],
       meta: {
@@ -1438,7 +1438,7 @@ const getAssessorEvaluationStatus = (req, res) => {
     });
   }
 
-  WorkloadForm.getAssessorEvaluationStatus(set_asses_list_id, (error, result) => {
+  WorkloadForm.getAssessorEvaluationStatus(set_asses_info_id, (error, result) => {
     if (error) {
       console.error('Error getting assessor evaluation status:', error);
       return res.status(500).json({
@@ -1473,6 +1473,82 @@ const getAssessorEvaluationStatus = (req, res) => {
       success: true,
       titleMessage: "สำเร็จ",
       message: "ดึงข้อมูลสถานะการประเมินสำเร็จ",
+      payload: [{ 
+        set_asses_info_id: parseInt(set_asses_info_id), 
+        workload_group_id: statusData.workload_group_id,
+        form_status: statusData.form_status,
+        evaluation_status: statusData.evaluation_status
+      }],
+      meta: {
+        limit: 0,
+        page: 1,
+        sort: "",
+        total_pages: 0,
+        total_rows: 1
+      }
+    });
+  });
+};
+
+// ดึงสถานะ form ของ assessor (ตาม set_asses_list_id สำหรับ admin page)
+const getAssessorFormStatus = (req, res) => {
+  const { set_asses_list_id } = req.params;
+
+  if (!set_asses_list_id) {
+    return res.status(400).json({
+      code: 400,
+      timestamp: new Date().toISOString(),
+      transactionCode: `TXN_${Date.now()}`,
+      success: false,
+      titleMessage: "เกิดข้อผิดพลาด",
+      message: "กรุณาระบุ set_asses_list_id",
+      errorCode: "MISSING_PARAMETERS",
+      payload: [],
+      meta: {
+        limit: 0,
+        page: 1,
+        sort: "",
+        total_pages: 0,
+        total_rows: 0
+      }
+    });
+  }
+
+  WorkloadForm.getAssessorFormStatus(set_asses_list_id, (error, result) => {
+    if (error) {
+      console.error('Error getting assessor form status:', error);
+      return res.status(500).json({
+        code: 500,
+        timestamp: new Date().toISOString(),
+        transactionCode: `TXN_${Date.now()}`,
+        success: false,
+        titleMessage: "เกิดข้อผิดพลาด",
+        message: "ไม่สามารถดึงข้อมูลสถานะ form ได้",
+        errorCode: "DATABASE_ERROR",
+        payload: [],
+        meta: {
+          limit: 0,
+          page: 1,
+          sort: "",
+          total_pages: 0,
+          total_rows: 0
+        }
+      });
+    }
+
+    const statusData = result && result.length > 0 ? result[0] : { 
+      workload_group_id: null, 
+      form_status: 0, 
+      evaluation_status: 'not_started' 
+    };
+
+    res.json({
+      code: 200,
+      timestamp: new Date().toISOString(),
+      transactionCode: `TXN_${Date.now()}`,
+      success: true,
+      titleMessage: "สำเร็จ",
+      message: "ดึงข้อมูลสถานะ form สำเร็จ",
       payload: [{ 
         set_asses_list_id: parseInt(set_asses_list_id), 
         workload_group_id: statusData.workload_group_id,
@@ -1838,6 +1914,21 @@ const getFormInfoWithSnapshot = (req, res) => {
     if (checkResult && checkResult.length > 0) {
       console.log('Loading from snapshot for formlist_id:', formlist_id);
       
+      // ตรวจสอบ status ของ formlist ก่อน
+      WorkloadForm.getFormlistId(as_u_id, round_list_id, (formlistError, formlistResult) => {
+        if (formlistError) {
+          console.error('Error fetching formlist status:', formlistError);
+          return res.status(500).json(createResponse(
+            false,
+            "ไม่สามารถดึงข้อมูลสถานะ formlist ได้",
+            [],
+            "DATABASE_ERROR"
+          ));
+        }
+
+        const formlistStatus = formlistResult && formlistResult.length > 0 ? formlistResult[0].status : 0;
+        const isFinalized = formlistStatus === 2;
+
         // ดึงข้อมูล snapshot ทั้งหมดสำหรับ formlist_id นี้ (ไม่จำกัดแค่ subtask_id เดียว)
         WorkloadForm.getAllFormInfoFromSnapshot(formlist_id, as_u_id, (snapshotError, snapshotResult) => {
           if (snapshotError) {
@@ -1850,28 +1941,87 @@ const getFormInfoWithSnapshot = (req, res) => {
             ));
           }
 
-          // แปลงผล GROUP_CONCAT (string) เป็น array ของไฟล์/ลิงก์ ก่อนส่งออก
-          const processedData = (snapshotResult || []).map((row) => {
-            const files = typeof row.files === 'string' && row.files.trim()
-              ? row.files.split(', ').map((f) => ({ file_name: f.trim() }))
-              : Array.isArray(row.files) ? row.files : [];
+          // ถ้า status = 2 (finalized) ให้ดึง evaluation scores เฉลี่ย
+          if (isFinalized) {
+            WorkloadEvaluation.getAverageEvaluationScoresByFormlist(formlist_id, (evalError, evalScores) => {
+              if (evalError) {
+                console.error('Error fetching evaluation scores:', evalError);
+                // ถ้าเกิด error ในการดึง evaluation scores ให้ใช้ค่าเดิม (quality * workload)
+              }
 
-            const links = typeof row.links === 'string' && row.links.trim()
-              ? row.links.split(', ').map((s) => {
-                  const [link_name = '', link_path = ''] = s.split('|');
-                  return { link_name, link_path };
-                })
-              : Array.isArray(row.links) ? row.links : [];
+              // สร้าง map ของ evaluation scores
+              const scoreMap = new Map();
+              if (evalScores && Array.isArray(evalScores)) {
+                console.log('Evaluation scores found:', evalScores.length, 'items');
+                evalScores.forEach((score) => {
+                  if (score.snapshot_form_id && score.average_score != null) {
+                    scoreMap.set(score.snapshot_form_id, Number(score.average_score));
+                    console.log(`Score for snapshot_form_id ${score.snapshot_form_id}: ${score.average_score}`);
+                  }
+                });
+              } else {
+                console.log('No evaluation scores found or invalid format');
+              }
 
-            return { ...row, files, links };
-          });
+              // แปลงผล GROUP_CONCAT (string) เป็น array ของไฟล์/ลิงก์ และเพิ่ม evaluation score
+              const processedData = (snapshotResult || []).map((row) => {
+                const files = typeof row.files === 'string' && row.files.trim()
+                  ? row.files.split(', ').map((f) => ({ file_name: f.trim() }))
+                  : Array.isArray(row.files) ? row.files : [];
 
-          return res.status(200).json(createResponse(
-            true,
-            "ดึงข้อมูลจาก snapshot สำเร็จ",
-            processedData
-          ));
+                const links = typeof row.links === 'string' && row.links.trim()
+                  ? row.links.split(', ').map((s) => {
+                      const [link_name = '', link_path = ''] = s.split('|');
+                      return { link_name, link_path };
+                    })
+                  : Array.isArray(row.links) ? row.links : [];
+
+                // เพิ่ม evaluation_score ถ้ามี
+                const evaluationScore = scoreMap.get(row.snapshot_form_id);
+                if (row.snapshot_form_id && evaluationScore != null) {
+                  console.log(`Mapped evaluation_score for snapshot_form_id ${row.snapshot_form_id}: ${evaluationScore}`);
+                } else if (row.snapshot_form_id) {
+                  console.log(`No evaluation_score found for snapshot_form_id ${row.snapshot_form_id}`);
+                }
+                return { 
+                  ...row, 
+                  files, 
+                  links,
+                  evaluation_score: evaluationScore != null ? evaluationScore : null
+                };
+              });
+
+              return res.status(200).json(createResponse(
+                true,
+                "ดึงข้อมูลจาก snapshot สำเร็จ",
+                processedData
+              ));
+            });
+          } else {
+            // ถ้า status != 2 ให้ใช้ค่าเดิม (quality * workload)
+            const processedData = (snapshotResult || []).map((row) => {
+              const files = typeof row.files === 'string' && row.files.trim()
+                ? row.files.split(', ').map((f) => ({ file_name: f.trim() }))
+                : Array.isArray(row.files) ? row.files : [];
+
+              const links = typeof row.links === 'string' && row.links.trim()
+                ? row.links.split(', ').map((s) => {
+                    const [link_name = '', link_path = ''] = s.split('|');
+                    return { link_name, link_path };
+                  })
+                : Array.isArray(row.links) ? row.links : [];
+
+              return { ...row, files, links };
+            });
+
+            return res.status(200).json(createResponse(
+              true,
+              "ดึงข้อมูลจาก snapshot สำเร็จ",
+              processedData
+            ));
+          }
         });
+      });
     } else {
       // ถ้าไม่มี snapshot ให้ดึงจากตารางหลัก
       console.log('Loading from main tables for formlist_id:', formlist_id);
@@ -2073,6 +2223,7 @@ module.exports = {
   updateWorkloadFormStatus,
   updateWorkloadFormStatusBulk,
   getAssessorEvaluationStatus,
+  getAssessorFormStatus,
   submitWorkloadForm,
   submitFormWithSnapshot,
   getFormInfoWithSnapshot,

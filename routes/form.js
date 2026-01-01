@@ -19,6 +19,7 @@ const {
   updateWorkloadFormStatus,
   updateWorkloadFormStatusBulk,
   getAssessorEvaluationStatus,
+  getAssessorFormStatus,
   submitWorkloadForm,
   submitFormWithSnapshot,
   getFormInfoWithSnapshot,
@@ -71,8 +72,11 @@ router.patch("/workload_form/status/:set_asses_list_id", auth, updateWorkloadFor
 router.patch("/workload_form/status_bulk", auth, updateWorkloadFormStatusBulk)
 
 
-// ดึงสถานะการประเมินของ assessor
-router.get("/workload_form/evaluation_status/:set_asses_list_id", auth, getAssessorEvaluationStatus)
+// ดึงสถานะการประเมินของ assessor (ตาม set_asses_info_id เพื่อตรวจสอบเฉพาะ assessor คนนั้น)
+router.get("/workload_form/evaluation_status/:set_asses_info_id", auth, getAssessorEvaluationStatus)
+
+// ดึงสถานะ form ของ assessor (ตาม set_asses_list_id สำหรับ admin page)
+router.get("/workload_form/form_status/:set_asses_list_id", auth, getAssessorFormStatus)
 
 // ส่งฟอร์มการประเมินภาระงาน
 router.patch("/workload_form/submit/:user_id/:round_list_id", auth, submitWorkloadForm)

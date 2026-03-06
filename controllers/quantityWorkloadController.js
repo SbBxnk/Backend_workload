@@ -1,14 +1,14 @@
 const QuantityWorkload = require('../models/quantityWorkloadModel');
 
 const getAllQuantityWorkload = (req, res) => {
-    const { 
-        search = '', 
-        limit = 10, 
-        page = 1, 
-        sort = 'quantity_workload_id', 
-        order = 'asc' 
+    const {
+        search = '',
+        limit = 10,
+        page = 1,
+        sort = 'quantity_workload_id',
+        order = 'asc'
     } = req.query;
-    
+
     const params = {
         search,
         limit: parseInt(limit),
@@ -16,7 +16,7 @@ const getAllQuantityWorkload = (req, res) => {
         sort,
         order
     };
-    
+
     QuantityWorkload.getAllQuantityWorkload(params, (error, result) => {
         if (error) {
             return res.status(500).json({
@@ -31,7 +31,7 @@ const getAllQuantityWorkload = (req, res) => {
                 payload: []
             });
         }
-        
+
         if (!result || !result.data || result.data.length === 0) {
             return res.status(200).json({
                 code: 200,
@@ -51,7 +51,7 @@ const getAllQuantityWorkload = (req, res) => {
                 payload: []
             });
         }
-        
+
         res.status(200).json({
             code: 200,
             timestamp: new Date().toISOString(),
@@ -68,7 +68,7 @@ const getAllQuantityWorkload = (req, res) => {
 
 // Helper function to generate transaction code
 const generateTransactionCode = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
         const r = Math.random() * 16 | 0;
         const v = c == 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
@@ -142,7 +142,7 @@ const deleteQuantityWorkload = (req, res) => {
 
 const updateQuantityWorkload = (req, res) => {
     const id = req.params.quantity_workload_id;
-    const QuantityWorkloadDetail = { 
+    const QuantityWorkloadDetail = {
         quantity_workload_hours: req.body.quantity_workload_hours,
         workload_group_id: req.body.workload_group_id,
         task_id: req.body.task_id
@@ -184,4 +184,42 @@ const updateQuantityWorkload = (req, res) => {
     });
 };
 
-module.exports = { getAllQuantityWorkload, getOneQuantityWorkload, addQuantityWorkload, deleteQuantityWorkload, updateQuantityWorkload };
+const getQuantityWorkloadByGroupId = (req, res) => {
+    const workload_group_id = req.params.workload_group_id;
+    QuantityWorkload.getQuantityWorkloadByGroupId(workload_group_id, (error, result) => {
+        if (error) {
+            return res.status(500).json({
+                code: 500,
+                timestamp: new Date().toISOString(),
+                transactionCode: generateTransactionCode(),
+                success: false,
+                titleMessage: "error",
+                message: "การเชื่อมต่อข้อมูลผิดพลาด",
+                errorCode: "DATABASE_ERROR",
+                meta: null,
+                payload: []
+            });
+        }
+
+        res.status(200).json({
+            code: 200,
+            timestamp: new Date().toISOString(),
+            transactionCode: generateTransactionCode(),
+            success: true,
+            titleMessage: "success",
+            message: "success",
+            errorCode: "",
+            meta: null,
+            payload: result
+        });
+    });
+};
+
+module.exports = {
+    getAllQuantityWorkload,
+    getOneQuantityWorkload,
+    addQuantityWorkload,
+    deleteQuantityWorkload,
+    updateQuantityWorkload,
+    getQuantityWorkloadByGroupId
+};

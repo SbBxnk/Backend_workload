@@ -30,19 +30,19 @@ const WorkloadForm = {
 
   addFormListBulk: (WorkloadFormDetails, callback) => {
     console.log('🔍 addFormListBulk model - Input:', JSON.stringify(WorkloadFormDetails, null, 2))
-    
+
     if (!Array.isArray(WorkloadFormDetails) || WorkloadFormDetails.length === 0) {
       console.log('❌ Model: Empty or invalid array')
       return callback(null, { affectedRows: 0 })
     }
-    
+
     // ใช้ INSERT IGNORE เพื่อข้าม duplicate entries
     const sql = "INSERT IGNORE INTO tb_workload_formlist (set_asses_list_id, status) VALUES ?"
     const values = WorkloadFormDetails.map(item => [item.set_asses_list_id, item.status_id])
-    
+
     console.log('🔍 Model - SQL:', sql)
     console.log('🔍 Model - Values:', values)
-    
+
     db.query(sql, [values], (error, result) => {
       if (error) {
         console.error('❌ Model - Database error:', error)
@@ -462,13 +462,13 @@ const WorkloadForm = {
         ORDER BY t.task_id, st.subtask_id, fi.form_id, ffi.fileinfo_id, fli.link_id
       `;
       console.log('Executing simple query with params:', [as_u_id, round_list_id]);
-      
+
       // ตรวจสอบ database connection
       if (!db) {
         console.error('Database connection is null');
         return callback(new Error('Database connection is null'), null);
       }
-      
+
       console.log('📊 Executing query with params:', { as_u_id, round_list_id });
       db.query(sql, [as_u_id, round_list_id], (error, result) => {
         if (error) {
@@ -543,7 +543,7 @@ const WorkloadForm = {
     if (!Array.isArray(set_asses_list_ids) || set_asses_list_ids.length === 0) {
       return callback(null, { affectedRows: 0 });
     }
-    
+
     const sql = "UPDATE tb_workload_formlist SET status = ? WHERE set_asses_list_id IN (?)";
     db.query(sql, [status, set_asses_list_ids], callback);
   },
@@ -639,7 +639,7 @@ const WorkloadForm = {
   },
 
   // ========== SNAPSHOT FUNCTIONS ==========
-  
+
   // สร้าง snapshot ของฟอร์มที่ส่งแล้ว
   createFormSnapshot: (formlist_id, as_u_id, round_list_id, callback) => {
     const sql = `

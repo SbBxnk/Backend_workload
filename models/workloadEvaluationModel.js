@@ -264,6 +264,21 @@ const WorkloadEvaluation = {
       GROUP BY item.snapshot_form_id;
     `;
     db.query(sql, [formlist_id], callback);
+  },
+
+  /**
+   * Fetch assigned workload group info for a specific user and round.
+   */
+  getAssignedWorkloadGroup: (as_u_id, round_list_id, callback) => {
+    const sql = `
+      SELECT 
+        sal.workload_group_id,
+        wg.workload_group_name
+      FROM tb_set_assessorlist sal
+      LEFT JOIN tb_workload_group wg ON wg.workload_group_id = sal.workload_group_id
+      WHERE sal.as_u_id = ? AND sal.round_list_id = ?;
+    `;
+    db.query(sql, [as_u_id, round_list_id], callback);
   }
 };
 

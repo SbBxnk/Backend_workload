@@ -402,9 +402,9 @@ const submitEvaluation = (req, res) => {
 
               const finalizeIfNeeded = (callback) => {
                 // Finalize ถ้าทั้งสององค์ประกอบส่งครบทุกคนแล้ว
-                if (totalAssignments > 0 && 
-                    submittedCount >= totalAssignments && 
-                    perfSubmittedCount >= totalAssignments) {
+                if (totalAssignments > 0 &&
+                  submittedCount >= totalAssignments &&
+                  perfSubmittedCount >= totalAssignments) {
                   WorkloadForm.updateFormlistStatusById(
                     evaluation.formlist_id,
                     2,
@@ -453,9 +453,73 @@ const submitEvaluation = (req, res) => {
   });
 };
 
+const getAverageScores = (req, res) => {
+  const { formlist_id } = req.params;
+
+  if (!formlist_id) {
+    return res.status(400).json(createResponse(
+      false,
+      'กรุณาระบุ formlist_id',
+      [],
+      'MISSING_PARAMETERS'
+    ));
+  }
+
+  WorkloadEvaluation.getAverageEvaluationScoresByFormlist(formlist_id, (error, rows) => {
+    if (error) {
+      console.error('Error fetching average evaluation scores:', error);
+      return res.status(500).json(createResponse(
+        false,
+        `ไม่สามารถดึงข้อมูลสรุปคะแนนได้: ${error.message || 'Unknown error'}`,
+        [],
+        'DATABASE_ERROR'
+      ));
+    }
+
+    res.json(createResponse(true, 'ดึงข้อมูลสรุปคะแนนสำเร็จ', rows || []));
+  });
+};
+
+const getAssignedWorkloadGroup = (req, res) => {
+  const { as_u_id, round_list_id } = req.params;
+
+  if (!as_u_id || !round_list_id) {
+    return res.status(400).json(createResponse(
+      false,
+      'กรุณาระบุ as_u_id และ round_list_id',
+      [],
+      'MISSING_PARAMETERS'
+    ));
+  }
+
+  WorkloadEvaluation.getAssignedWorkloadGroup(as_u_id, round_list_id, (error, rows) => {
+    if (error) {
+      console.error('Error fetching assigned workload group:', error);
+      return res.status(500).json(createResponse(
+        false,
+        'ไม่สามารถดึงข้อมูลกลุ่มภาระงานได้',
+        [],
+        'DATABASE_ERROR'
+      ));
+    }
+
+    if (!rows || rows.length === 0) {
+      return res.status(200).json(createResponse(
+        true,
+        'ไม่พบข้อมูลกลุ่มภาระงานสำหรับรอบนี้',
+        null
+      ));
+    }
+
+    res.json(createResponse(true, 'ดึงข้อมูลกลุ่มภาระงานสำเร็จ', rows[0]));
+  });
+};
+
 module.exports = {
   getEvaluation,
   saveDraft,
-  submitEvaluation
+  submitEvaluation,
+  getAverageScores,
+  getAssignedWorkloadGroup
 };
 

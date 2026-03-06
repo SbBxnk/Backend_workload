@@ -84,7 +84,7 @@ const addFormList = (req, res) => {
 
 const addFormListBulk = (req, res) => {
   const WorkloadFormDetails = req.body
-  
+
   if (!Array.isArray(WorkloadFormDetails)) {
     console.log('❌ Not an array:', typeof WorkloadFormDetails)
     return res.status(400).json({
@@ -92,7 +92,7 @@ const addFormListBulk = (req, res) => {
       error: "ข้อมูลต้องเป็น array"
     })
   }
-  
+
   // ตรวจสอบว่า array ไม่ว่าง
   if (WorkloadFormDetails.length === 0) {
     return res.status(400).json({
@@ -100,12 +100,12 @@ const addFormListBulk = (req, res) => {
       error: "ไม่พบข้อมูลสำหรับเพิ่ม"
     })
   }
-  
+
   // ตรวจสอบข้อมูลใน array
   for (let i = 0; i < WorkloadFormDetails.length; i++) {
     const item = WorkloadFormDetails[i]
     console.log(`🔍 Item ${i}:`, { set_asses_list_id: item.set_asses_list_id, status_id: item.status_id })
-    
+
     if (!item.set_asses_list_id || item.status_id === undefined) {
       return res.status(400).json({
         status: false,
@@ -113,7 +113,7 @@ const addFormListBulk = (req, res) => {
       })
     }
   }
-  
+
   WorkloadForm.addFormListBulk(WorkloadFormDetails, (error, result) => {
     if (error) {
       console.error("❌ Bulk insert error:", error)
@@ -123,7 +123,7 @@ const addFormListBulk = (req, res) => {
         sqlState: error.sqlState,
         sqlMessage: error.sqlMessage
       })
-      
+
       // ตรวจสอบว่าเป็น duplicate key error หรือไม่
       if (error.code === 'ER_DUP_ENTRY') {
         console.log('⚠️ Duplicate entry detected, but this is expected behavior')
@@ -136,13 +136,13 @@ const addFormListBulk = (req, res) => {
           }
         })
       }
-      
+
       return res.status(500).json({
         status: false,
         error: "การเชื่อมต่อข้อมูลผิดพลาด"
       })
     }
-    
+
     console.log('✅ Bulk insert successful:', result)
     res.status(200).json({
       status: true,
@@ -306,7 +306,7 @@ const addFormInfo = (req, res) => {
   if (file_type === "external file" && (!files || files.length === 0)) {
     return res.status(400).send({ status: false, error: "ต้องอัปโหลดไฟล์สำหรับ file_type: external file" })
   }
-  
+
   // แปลง links จาก string เป็น object ถ้าจำเป็น
   let parsedLinks = links;
   if (file_type === "link") {
@@ -318,12 +318,12 @@ const addFormInfo = (req, res) => {
         return res.status(400).send({ status: false, error: "รูปแบบลิงก์ไม่ถูกต้อง" });
       }
     }
-    
+
     if (!parsedLinks || !Array.isArray(parsedLinks) || parsedLinks.length === 0) {
       return res.status(400).send({ status: false, error: "ต้องระบุอย่างน้อยหนึ่งลิงก์สำหรับ file_type: link" });
     }
   }
-  
+
   if (file_type === "link" && files && files.length > 0) {
     return res.status(400).send({ status: false, error: "ไม่สามารถอัปโหลดไฟล์เมื่อ file_type เป็น link" })
   }
@@ -633,7 +633,7 @@ const getFormDetail = (req, res) => {
 // แก้ไขฟังก์ชัน updateFormInfo เพื่อให้แสดง log เมื่อมีการอัปโหลดรูปภาพ
 const checkWorkloadFormStatus = (req, res) => {
   const { as_u_id, round_list_id } = req.params;
-  
+
   if (!as_u_id || !round_list_id) {
     return res.status(400).json({
       code: 400,
@@ -717,9 +717,9 @@ const checkWorkloadFormStatus = (req, res) => {
 
 const getWorkloadItemsByGroup = (req, res) => {
   const { as_u_id, round_list_id } = req.params;
-  
+
   console.log('API called with params:', { as_u_id, round_list_id });
-  
+
   if (!as_u_id || !round_list_id) {
     return res.status(400).json({
       code: 400,
@@ -768,13 +768,13 @@ const getWorkloadItemsByGroup = (req, res) => {
 
     // จัดกลุ่มข้อมูลตามโครงสร้าง task → subtask → form_info
     const groupedData = {};
-    
+
     if (result && result.length > 0) {
       result.forEach(row => {
         const taskId = row.task_id;
         const subtaskId = row.subtask_id;
         const formId = row.form_id;
-        
+
         // สร้าง task ถ้ายังไม่มี
         if (!groupedData[taskId]) {
           groupedData[taskId] = {
@@ -786,7 +786,7 @@ const getWorkloadItemsByGroup = (req, res) => {
             subtasks: {}
           };
         }
-        
+
         // สร้าง subtask ถ้ายังไม่มี
         if (!groupedData[taskId].subtasks[subtaskId]) {
           groupedData[taskId].subtasks[subtaskId] = {
@@ -795,12 +795,12 @@ const getWorkloadItemsByGroup = (req, res) => {
             form_infos: []
           };
         }
-        
+
         // หา form_info ที่มีอยู่แล้ว
         let existingForm = groupedData[taskId].subtasks[subtaskId].form_infos.find(
           form => form.form_id === formId
         );
-        
+
         // ถ้ายังไม่มี form_info นี้ ให้สร้างใหม่
         if (!existingForm) {
           existingForm = {
@@ -819,7 +819,7 @@ const getWorkloadItemsByGroup = (req, res) => {
           };
           groupedData[taskId].subtasks[subtaskId].form_infos.push(existingForm);
         }
-        
+
         // เพิ่มไฟล์หรือ link ถ้ามี
         if (row.file_name && row.fileinfo_id) {
           // ตรวจสอบว่าไฟล์นี้มีอยู่แล้วหรือไม่
@@ -831,7 +831,7 @@ const getWorkloadItemsByGroup = (req, res) => {
             });
           }
         }
-        
+
         if (row.link_name && row.link_path) {
           // ตรวจสอบว่า link นี้มีอยู่แล้วหรือไม่
           const existingLink = existingForm.links.find(link => link.link_path === row.link_path);
@@ -1398,8 +1398,8 @@ const updateWorkloadFormStatusBulk = (req, res) => {
       success: true,
       titleMessage: "สำเร็จ",
       message: `อัปเดตสถานะสำเร็จ ${result.affectedRows} รายการ`,
-      payload: [{ 
-        set_asses_list_ids: set_asses_list_ids, 
+      payload: [{
+        set_asses_list_ids: set_asses_list_ids,
         status: status,
         affected_rows: result.affectedRows
       }],
@@ -1460,10 +1460,10 @@ const getAssessorEvaluationStatus = (req, res) => {
       });
     }
 
-    const statusData = result && result.length > 0 ? result[0] : { 
-      workload_group_id: null, 
-      form_status: 0, 
-      evaluation_status: 'not_started' 
+    const statusData = result && result.length > 0 ? result[0] : {
+      workload_group_id: null,
+      form_status: 0,
+      evaluation_status: 'not_started'
     };
 
     res.json({
@@ -1473,8 +1473,8 @@ const getAssessorEvaluationStatus = (req, res) => {
       success: true,
       titleMessage: "สำเร็จ",
       message: "ดึงข้อมูลสถานะการประเมินสำเร็จ",
-      payload: [{ 
-        set_asses_info_id: parseInt(set_asses_info_id), 
+      payload: [{
+        set_asses_info_id: parseInt(set_asses_info_id),
         workload_group_id: statusData.workload_group_id,
         form_status: statusData.form_status,
         evaluation_status: statusData.evaluation_status
@@ -1536,10 +1536,10 @@ const getAssessorFormStatus = (req, res) => {
       });
     }
 
-    const statusData = result && result.length > 0 ? result[0] : { 
-      workload_group_id: null, 
-      form_status: 0, 
-      evaluation_status: 'not_started' 
+    const statusData = result && result.length > 0 ? result[0] : {
+      workload_group_id: null,
+      form_status: 0,
+      evaluation_status: 'not_started'
     };
 
     res.json({
@@ -1549,8 +1549,8 @@ const getAssessorFormStatus = (req, res) => {
       success: true,
       titleMessage: "สำเร็จ",
       message: "ดึงข้อมูลสถานะ form สำเร็จ",
-      payload: [{ 
-        set_asses_list_id: parseInt(set_asses_list_id), 
+      payload: [{
+        set_asses_list_id: parseInt(set_asses_list_id),
         workload_group_id: statusData.workload_group_id,
         form_status: statusData.form_status,
         evaluation_status: statusData.evaluation_status
@@ -1569,7 +1569,7 @@ const getAssessorFormStatus = (req, res) => {
 // ส่งฟอร์มการประเมินภาระงานโดยใช้ user_id และ round_list_id
 const submitWorkloadForm = (req, res) => {
   const { user_id, round_list_id } = req.params;
-  
+
   if (!user_id || !round_list_id) {
     return res.status(400).json({
       code: 400,
@@ -1665,7 +1665,7 @@ const submitWorkloadForm = (req, res) => {
         success: true,
         titleMessage: "สำเร็จ",
         message: "ส่งฟอร์มการประเมินภาระงานสำเร็จ",
-        payload: [{ 
+        payload: [{
           user_id: parseInt(user_id),
           round_list_id: parseInt(round_list_id),
           set_asses_list_id: set_asses_list_id,
@@ -1757,7 +1757,7 @@ const submitFormWithSnapshot = (req, res) => {
                     return;
                   }
 
-                                      // 7. คัดลอกลิงก์
+                  // 7. คัดลอกลิงก์
                   WorkloadForm.copyLinksToSnapshot(snapshotId, (linksError) => {
                     if (linksError) {
                       console.error('Error copying links:', linksError);
@@ -1780,7 +1780,7 @@ const submitFormWithSnapshot = (req, res) => {
   const createPerformanceSnapshot = () => {
     return new Promise((resolve, reject) => {
       const Performance = require('../models/performanceModel');
-      
+
       // 1. ลบ snapshot performance เก่า (ถ้ามี)
       Performance.deleteExistingPerformanceSnapshot(formlist_id, as_u_id, round_list_id, (deleteError) => {
         if (deleteError) {
@@ -1913,7 +1913,7 @@ const getFormInfoWithSnapshot = (req, res) => {
     // ถ้ามี snapshot ให้ดึงจาก snapshot
     if (checkResult && checkResult.length > 0) {
       console.log('Loading from snapshot for formlist_id:', formlist_id);
-      
+
       // ตรวจสอบ status ของ formlist ก่อน
       WorkloadForm.getFormlistId(as_u_id, round_list_id, (formlistError, formlistResult) => {
         if (formlistError) {
@@ -1971,9 +1971,9 @@ const getFormInfoWithSnapshot = (req, res) => {
 
                 const links = typeof row.links === 'string' && row.links.trim()
                   ? row.links.split(', ').map((s) => {
-                      const [link_name = '', link_path = ''] = s.split('|');
-                      return { link_name, link_path };
-                    })
+                    const [link_name = '', link_path = ''] = s.split('|');
+                    return { link_name, link_path };
+                  })
                   : Array.isArray(row.links) ? row.links : [];
 
                 // เพิ่ม evaluation_score ถ้ามี
@@ -1983,9 +1983,9 @@ const getFormInfoWithSnapshot = (req, res) => {
                 } else if (row.snapshot_form_id) {
                   console.log(`No evaluation_score found for snapshot_form_id ${row.snapshot_form_id}`);
                 }
-                return { 
-                  ...row, 
-                  files, 
+                return {
+                  ...row,
+                  files,
                   links,
                   evaluation_score: evaluationScore != null ? evaluationScore : null
                 };
@@ -2006,9 +2006,9 @@ const getFormInfoWithSnapshot = (req, res) => {
 
               const links = typeof row.links === 'string' && row.links.trim()
                 ? row.links.split(', ').map((s) => {
-                    const [link_name = '', link_path = ''] = s.split('|');
-                    return { link_name, link_path };
-                  })
+                  const [link_name = '', link_path = ''] = s.split('|');
+                  return { link_name, link_path };
+                })
                 : Array.isArray(row.links) ? row.links : [];
 
               return { ...row, files, links };
@@ -2025,7 +2025,7 @@ const getFormInfoWithSnapshot = (req, res) => {
     } else {
       // ถ้าไม่มี snapshot ให้ดึงจากตารางหลัก
       console.log('Loading from main tables for formlist_id:', formlist_id);
-      
+
       WorkloadForm.getOneFormInfo(formlist_id, subtask_id, (error, formResult) => {
         if (error) {
           console.error("Error fetching form info:", error);
@@ -2168,7 +2168,7 @@ const getFormlistId = (req, res) => {
 
   if (!as_u_id || !round_list_id) {
     return res.status(400).json(createResponse(
-      false, 
+      false,
       'Missing required parameters: as_u_id and round_list_id',
       [],
       'MISSING_PARAMETERS'

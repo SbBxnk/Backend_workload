@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const upload = require('../middleware/file_upload');
 const XLSX = require('xlsx');
+const AuditLog = require('../models/audit_logModel');
 
 const GetAllUser = (req, res) => {
     const params = {
@@ -36,10 +37,10 @@ const GetAllUser = (req, res) => {
 
         // Get paginated data
         LoginRegis.GetAllUser(params, (error, result) => {
-        if (error) {
+            if (error) {
                 console.error('Database error:', error);
-            return res.status(500).send({ status: false, error: 'Database query failed' });
-        }
+                return res.status(500).send({ status: false, error: 'Database query failed' });
+            }
 
             const response = {
                 code: 200,
@@ -67,56 +68,56 @@ const GetAllUser = (req, res) => {
 }
 const GetAllExUser = (req, res) => {
     const set_asses_list_id = req.query.set_asses_list_id
-  
+
     if (!set_asses_list_id) {
-      return res.status(400).send({ status: false, error: "Missing set_asses_list_id parameter" })
+        return res.status(400).send({ status: false, error: "Missing set_asses_list_id parameter" })
     }
-  
+
     LoginRegis.GetAllExUser(set_asses_list_id, (error, result) => {
-      if (error) {
-        return res.status(500).send({ status: false, error: "Database query failed" })
-      } else if (!result || result.length === 0) {
-        return res.status(200).send({ 
-          status: true, 
-          data: [],
-          message: "ไม่พบผู้ประเมินที่สามารถเลือกได้"
-        })
-      }
-  
-      res.send({ status: true, data: result })
+        if (error) {
+            return res.status(500).send({ status: false, error: "Database query failed" })
+        } else if (!result || result.length === 0) {
+            return res.status(200).send({
+                status: true,
+                data: [],
+                message: "ไม่พบผู้ประเมินที่สามารถเลือกได้"
+            })
+        }
+
+        res.send({ status: true, data: result })
     })
-  }
+}
 
 
 
 
 const GetAllAsUser = (req, res) => {
     const round_list_id = req.params.round_list_id
-  
+
     // Validate input parameters
     if (!round_list_id) {
-      return res.status(400).send({
-        status: false,
-        error: "Missing required parameter: round_list_id is required",
-      })
-    }
-  
-    LoginRegis.GetAllAsUser(round_list_id, (error, result) => {
-      if (error) {
-        console.error("Database query error:", error)
-        return res.status(500).send({
-          status: false,
-          error: "Database query failed",
+        return res.status(400).send({
+            status: false,
+            error: "Missing required parameter: round_list_id is required",
         })
-      }
-  
-      // Always return success with data array (empty if no results)
-      res.send({
-        status: true,
-        data: result || [],
-      })
+    }
+
+    LoginRegis.GetAllAsUser(round_list_id, (error, result) => {
+        if (error) {
+            console.error("Database query error:", error)
+            return res.status(500).send({
+                status: false,
+                error: "Database query failed",
+            })
+        }
+
+        // Always return success with data array (empty if no results)
+        res.send({
+            status: true,
+            data: result || [],
+        })
     })
-  }
+}
 
 const GetOneUser = (req, res) => {
     const id = req.params.u_id;
@@ -127,7 +128,7 @@ const GetOneUser = (req, res) => {
         if (!result || result.length === 0) {
             return res.status(404).send({ status: false, error: 'User not found' });
         }
-        
+
         // ส่ง response ในรูปแบบ standard format
         const response = {
             code: 200,
@@ -146,7 +147,7 @@ const GetOneUser = (req, res) => {
                 total_rows: 1
             }
         };
-        
+
         res.send(response);
     });
 };
@@ -328,7 +329,7 @@ const updateUser = (req, res) => {
                     return res.status(500).json({ status: "error", message: "Database error" });
                 }
 
-                return res.json({ 
+                return res.json({
                     code: 200,
                     timestamp: new Date().toISOString(),
                     transactionCode: `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -355,15 +356,15 @@ const updateProfile = (req, res) => {
     upload.single('u_img')(req, res, (err) => {
         if (err) {
             console.error("File upload error:", err);
-            return res.status(500).json({ 
-                success: false, 
-                message: "Error uploading file" 
+            return res.status(500).json({
+                success: false,
+                message: "Error uploading file"
             });
         }
 
         // ใช้ user ID จาก JWT token (ที่ผ่าน middleware auth)
         const userId = req.user.id;
-        
+
         console.log('Update Profile Debug:');
         console.log('User ID:', userId);
         console.log('File uploaded:', req.file ? req.file.filename : 'No file');
@@ -377,23 +378,23 @@ const updateProfile = (req, res) => {
         LoginRegis.GetOneUser(userId, (error, existingUser) => {
             if (error) {
                 console.error("Database error:", error);
-                return res.status(500).json({ 
-                    success: false, 
-                    message: "Database error" 
+                return res.status(500).json({
+                    success: false,
+                    message: "Database error"
                 });
             }
 
             if (!existingUser || existingUser.length === 0) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: "User not found" 
+                return res.status(404).json({
+                    success: false,
+                    message: "User not found"
                 });
             }
 
             // เตรียมข้อมูลสำหรับอัปเดต - รับข้อมูลจาก FormData
             // จัดการรูปภาพ: ถ้ามีไฟล์ใหม่ใช้ไฟล์ใหม่ ถ้าไม่มีใช้รูปเดิม
             const imageUrl = req.file ? req.file.filename : existingUser[0].u_img;
-            
+
             const updatedUser = {
                 u_email: req.body.u_email || existingUser[0].u_email,
                 u_fname: req.body.u_fname || existingUser[0].u_fname,
@@ -414,7 +415,7 @@ const updateProfile = (req, res) => {
                 work_start: req.body.work_start ? formatDate(req.body.work_start) : existingUser[0].work_start
             };
 
-           
+
 
             console.log('Updated User Data:', updatedUser);
             console.log('Work start date processing:');
@@ -425,19 +426,19 @@ const updateProfile = (req, res) => {
             LoginRegis.UpdateUserProfile(userId, updatedUser, (updateError, result) => {
                 if (updateError) {
                     console.error("Database error:", updateError);
-                    return res.status(500).json({ 
-                        success: false, 
-                        message: "Database error: " + updateError.message 
+                    return res.status(500).json({
+                        success: false,
+                        message: "Database error: " + updateError.message
                     });
                 }
 
                 console.log('Update result:', result);
 
                 // ส่งข้อมูลที่อัปเดตแล้วกลับไป
-                return res.json({ 
-                    success: true, 
-                    message: "Profile updated successfully", 
-                    payload: [updatedUser] 
+                return res.json({
+                    success: true,
+                    message: "Profile updated successfully",
+                    payload: [updatedUser]
                 });
             });
         });
@@ -466,34 +467,24 @@ const login = (req, res) => {
                 const token = jwt.sign(
                     {
                         id: user[0].u_id,
-                        gender: user[0].gender,
-                        prefix_name: user[0].prefix_name,
-                        prefix_id: user[0].prefix_id,
-                        u_fname: user[0].u_fname,
-                        u_lname: user[0].u_lname,
-                        age: user[0].age,
-                        salary: user[0].salary,
-                        u_email: user[0].u_email,
                         level_name: user[0].level_name,
-                        level_id: user[0].level_id,
-                        u_id_card: user[0].u_id_card,
-                        u_tel: user[0].u_tel,
-                        position_name: user[0].position_name,
-                        position_id: user[0].position_id,
-                        ex_position_name: user[0].ex_position_name,
-                        ex_position_id: user[0].ex_position_id,
-                        course_name: user[0].course_name,
-                        course_id: user[0].course_id,
-                        branch_name: user[0].branch_name,
-                        branch_id: user[0].branch_id,
-                        type_p_name: user[0].type_p_name,
-                        type_p_id: user[0].type_p_id,
-                        u_img: user[0].u_img,
-                        work_start: user[0].work_start
                     },
                     secret_token,
                     { expiresIn: '23h' }
                 );
+                // บันทึก Audit Log สำหรับการเข้าสู่ระบบ
+                AuditLog.addLog({
+                    u_id: user[0].u_id,
+                    action: `User ${user[0].u_fname} ${user[0].u_lname} (ID: ${user[0].u_id}) logged in successful.`,
+                    method: 'POST',
+                    endpoint: '/api/login',
+                    payload: JSON.stringify({ email: user[0].u_email }), // ไม่บันทึกรหัสผ่าน
+                    ip_address: req.ip || req.connection.remoteAddress,
+                    user_agent: req.get('User-Agent')
+                }, (err) => {
+                    if (err) console.error("Error logging login action:", err);
+                });
+
                 return res.json({
                     status: "ok",
                     message: "Login successful",
@@ -558,7 +549,7 @@ const createTransporter = () => {
 const sendResetEmail = async (email, resetToken, userName = '') => {
     const transporter = createTransporter();
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
+
     const mailOptions = {
         from: `"ระบบสนับสนุนการประเมินภาระงานบุคลากรสายวิชาการ มหาวิทยาลัยเทคโนโลยีราชมงคลล้านนา ลำปาง" <${process.env.EMAIL_USER}>`,
         to: email,
@@ -625,7 +616,7 @@ const sendResetEmail = async (email, resetToken, userName = '') => {
         // Test transporter connection
         await transporter.verify();
         console.log('Email transporter verified successfully');
-        
+
         // Send email
         const info = await transporter.sendMail(mailOptions);
         console.log('Reset email sent successfully to:', email);
@@ -646,24 +637,24 @@ const sendResetEmail = async (email, resetToken, userName = '') => {
 // Forgot password controller
 const forgotPassword = async (req, res) => {
     const { u_email } = req.body;
-    
 
-    
+
+
     try {
         // 1. ตรวจสอบว่าอีเมลมีอยู่ในระบบหรือไม่
         LoginRegis.findUserByEmail(u_email, (err, user) => {
             if (err) {
                 console.error('Database error:', err);
-                return res.status(500).json({ 
-                    status: false, 
-                    message: 'เกิดข้อผิดพลาดในการตรวจสอบอีเมล' 
+                return res.status(500).json({
+                    status: false,
+                    message: 'เกิดข้อผิดพลาดในการตรวจสอบอีเมล'
                 });
             }
-            
+
             if (!user || user.length === 0) {
-                return res.status(404).json({ 
-                    status: false, 
-                    message: 'ไม่พบอีเมลในระบบ' 
+                return res.status(404).json({
+                    status: false,
+                    message: 'ไม่พบอีเมลในระบบ'
                 });
             }
 
@@ -680,9 +671,9 @@ const forgotPassword = async (req, res) => {
             LoginRegis.saveResetToken(u_email, resetToken, resetTokenExpiry, (saveErr) => {
                 if (saveErr) {
                     console.error('Error saving reset token:', saveErr);
-                    return res.status(500).json({ 
-                        status: false, 
-                        message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' 
+                    return res.status(500).json({
+                        status: false,
+                        message: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล'
                     });
                 }
 
@@ -691,25 +682,25 @@ const forgotPassword = async (req, res) => {
                 console.log('Generated userName:', userName);
                 sendResetEmail(u_email, resetToken, userName)
                     .then(() => {
-                        res.json({ 
-                            status: true, 
-                            message: 'ส่งลิงก์รีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว' 
+                        res.json({
+                            status: true,
+                            message: 'ส่งลิงก์รีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว'
                         });
                     })
                     .catch((emailErr) => {
                         console.error('Error sending email:', emailErr);
-                        res.status(500).json({ 
-                            status: false, 
-                            message: 'เกิดข้อผิดพลาดในการส่งอีเมล' 
+                        res.status(500).json({
+                            status: false,
+                            message: 'เกิดข้อผิดพลาดในการส่งอีเมล'
                         });
                     });
             });
         });
     } catch (error) {
         console.error('Forgot password error:', error);
-        res.status(500).json({ 
-            status: false, 
-            message: 'เกิดข้อผิดพลาดในระบบ' 
+        res.status(500).json({
+            status: false,
+            message: 'เกิดข้อผิดพลาดในระบบ'
         });
     }
 };
@@ -717,22 +708,22 @@ const forgotPassword = async (req, res) => {
 // Reset password controller
 const resetPassword = async (req, res) => {
     const { token, newPassword } = req.body;
-    
+
     try {
         // 1. ตรวจสอบ token
         LoginRegis.findUserByResetToken(token, (err, user) => {
             if (err) {
                 console.error('Database error:', err);
-                return res.status(500).json({ 
-                    status: false, 
-                    message: 'เกิดข้อผิดพลาดในการตรวจสอบ token' 
+                return res.status(500).json({
+                    status: false,
+                    message: 'เกิดข้อผิดพลาดในการตรวจสอบ token'
                 });
             }
-            
+
             if (!user || user.length === 0) {
-                return res.status(400).json({ 
-                    status: false, 
-                    message: 'Token ไม่ถูกต้องหรือหมดอายุ' 
+                return res.status(400).json({
+                    status: false,
+                    message: 'Token ไม่ถูกต้องหรือหมดอายุ'
                 });
             }
 
@@ -740,9 +731,9 @@ const resetPassword = async (req, res) => {
             bcrypt.hash(newPassword, saltRounds, (hashErr, hashedPassword) => {
                 if (hashErr) {
                     console.error('Error hashing password:', hashErr);
-                    return res.status(500).json({ 
-                        status: false, 
-                        message: 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน' 
+                    return res.status(500).json({
+                        status: false,
+                        message: 'เกิดข้อผิดพลาดในการเข้ารหัสรหัสผ่าน'
                     });
                 }
 
@@ -750,9 +741,9 @@ const resetPassword = async (req, res) => {
                 LoginRegis.updatePassword(user[0].u_id, hashedPassword, (updateErr) => {
                     if (updateErr) {
                         console.error('Error updating password:', updateErr);
-                        return res.status(500).json({ 
-                            status: false, 
-                            message: 'เกิดข้อผิดพลาดในการอัปเดตรหัสผ่าน' 
+                        return res.status(500).json({
+                            status: false,
+                            message: 'เกิดข้อผิดพลาดในการอัปเดตรหัสผ่าน'
                         });
                     }
 
@@ -762,9 +753,9 @@ const resetPassword = async (req, res) => {
                             console.error('Error clearing reset token:', clearErr);
                         }
 
-                        res.json({ 
-                            status: true, 
-                            message: 'รีเซ็ตรหัสผ่านสำเร็จ' 
+                        res.json({
+                            status: true,
+                            message: 'รีเซ็ตรหัสผ่านสำเร็จ'
                         });
                     });
                 });
@@ -772,9 +763,9 @@ const resetPassword = async (req, res) => {
         });
     } catch (error) {
         console.error('Reset password error:', error);
-        res.status(500).json({ 
-            status: false, 
-            message: 'เกิดข้อผิดพลาดในระบบ' 
+        res.status(500).json({
+            status: false,
+            message: 'เกิดข้อผิดพลาดในระบบ'
         });
     }
 };
@@ -782,45 +773,45 @@ const resetPassword = async (req, res) => {
 // Validate reset token controller
 const validateResetToken = async (req, res) => {
     const { token } = req.body;
-    
+
     try {
         // ตรวจสอบ token
         LoginRegis.findUserByResetToken(token, (err, user) => {
             if (err) {
                 console.error('Database error:', err);
-                return res.status(500).json({ 
-                    status: false, 
-                    message: 'เกิดข้อผิดพลาดในการตรวจสอบ token' 
+                return res.status(500).json({
+                    status: false,
+                    message: 'เกิดข้อผิดพลาดในการตรวจสอบ token'
                 });
             }
-            
+
             if (!user || user.length === 0) {
-                return res.status(400).json({ 
-                    status: false, 
-                    message: 'Token ไม่ถูกต้องหรือหมดอายุ' 
+                return res.status(400).json({
+                    status: false,
+                    message: 'Token ไม่ถูกต้องหรือหมดอายุ'
                 });
             }
 
             // ตรวจสอบว่า token หมดอายุหรือไม่
             const now = Date.now();
             if (user[0].reset_token_expiry && now > user[0].reset_token_expiry) {
-                return res.status(400).json({ 
-                    status: false, 
-                    message: 'Token หมดอายุแล้ว กรุณาขอลิงก์ใหม่' 
+                return res.status(400).json({
+                    status: false,
+                    message: 'Token หมดอายุแล้ว กรุณาขอลิงก์ใหม่'
                 });
             }
 
             // Token ถูกต้องและยังไม่หมดอายุ
-            return res.json({ 
-                status: true, 
-                message: 'Token ถูกต้อง' 
+            return res.json({
+                status: true,
+                message: 'Token ถูกต้อง'
             });
         });
     } catch (error) {
         console.error('Validate reset token error:', error);
-        res.status(500).json({ 
-            status: false, 
-            message: 'เกิดข้อผิดพลาดในระบบ' 
+        res.status(500).json({
+            status: false,
+            message: 'เกิดข้อผิดพลาดในระบบ'
         });
     }
 };
@@ -829,7 +820,7 @@ const validateResetToken = async (req, res) => {
 // Export users to Excel
 const exportUsersToExcel = (req, res) => {
     console.log('Export API called with params:', req.query);
-    
+
     const params = {
         search: req.query.search || '',
         position_name: req.query.position_name || '',
@@ -845,7 +836,7 @@ const exportUsersToExcel = (req, res) => {
     const activeFilters = Object.entries(params)
         .filter(([key, value]) => value && value !== '')
         .map(([key, value]) => `${key}: ${value}`);
-    
+
     if (activeFilters.length > 0) {
         console.log('Active filters for export:', activeFilters);
     } else {
@@ -871,7 +862,7 @@ const exportUsersToExcel = (req, res) => {
 
         try {
             console.log('Starting Excel creation...');
-            
+
             // Prepare data for Excel
             const excelData = result.map((user, index) => ({
                 'ลำดับ': index + 1,
@@ -952,35 +943,53 @@ const exportUsersToExcel = (req, res) => {
 
 const deleteUser = (req, res) => {
     const id = req.params.u_id;
-    
+
     LoginRegis.DeleteUser(id, (error, result) => {
         if (error) {
             console.error("Database error:", error);
-            return res.status(500).json({ 
-                status: "error", 
-                message: "Database error" 
+            return res.status(500).json({
+                status: "error",
+                message: "Database error"
             });
         }
-        
-        return res.json({ 
-            status: "ok", 
-            message: "User deleted successfully" 
+
+        return res.json({
+            status: "ok",
+            message: "User deleted successfully"
         });
     });
 };
 
-module.exports = { 
-    register, 
-    login, 
-    GetAllUser, 
-    GetAllExUser, 
-    GetAllAsUser, 
-    GetOneUser, 
-    updateUser, 
+const getMe = (req, res) => {
+    const userId = req.user.id;
+    LoginRegis.GetOneUser(userId, (error, result) => {
+        if (error) {
+            return res.status(500).json({ status: false, error: 'Database query failed' });
+        }
+        if (!result || result.length === 0) {
+            return res.status(404).json({ status: false, error: 'User not found' });
+        }
+        res.json({
+            code: 200,
+            success: true,
+            payload: result[0],
+        });
+    });
+};
+
+module.exports = {
+    register,
+    login,
+    getMe,
+    GetAllUser,
+    GetAllExUser,
+    GetAllAsUser,
+    GetOneUser,
+    updateUser,
     updateProfile,
     deleteUser,
-    CountAllBranch, 
-    CountOneBranch, 
+    CountAllBranch,
+    CountOneBranch,
     CountGroupBranch,
     forgotPassword,
     validateResetToken,

@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { login, GetAllUser,GetAllAsUser,GetAllExUser, register,GetOneUser,updateUser,updateProfile,deleteUser,CountAllBranch,CountOneBranch,CountGroupBranch, forgotPassword, resetPassword, validateResetToken, exportUsersToExcel } = require('../controllers/userController');
+const { login, getMe, GetAllUser,GetAllAsUser,GetAllExUser, register,GetOneUser,updateUser,updateProfile,deleteUser,CountAllBranch,CountOneBranch,CountGroupBranch, forgotPassword, resetPassword, validateResetToken, exportUsersToExcel } = require('../controllers/userController');
 const  auth  = require('../middleware/auth');
 
+router.get('/me', auth, getMe);
 router.get('/user', auth, GetAllUser);
 // Export users to Excel (ต้องอยู่ก่อน /user/:u_id)
 router.get('/user/export', auth, exportUsersToExcel);
